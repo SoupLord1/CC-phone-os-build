@@ -64,22 +64,35 @@ function window_builder.widgets.textbox.draw_textbox(x, y, textbox_id, bgcolor, 
 	term.write(window_builder.widgets.textbox.textboxes[textbox_id].text)
 end
 
+held_keys = {}
+held_keys[keys.leftShift] = false
+
 function window_builder.widgets.textbox.update_textbox(textbox_id)
 
-	local event, key = os.pullEvent()
-	if key == keys.backspace then
-		window_builder.widgets.textbox.textboxes[textbox_id].text = string.sub(window_builder.widgets.textbox.textboxes[textbox_id].text, 1, string.len(window_builder.widgets.textbox.textboxes[textbox_id].text) - 1)
-	elseif string.len(window_builder.widgets.textbox.textboxes[textbox_id].text) < window_builder.widgets.textbox.textboxes[textbox_id].max_chars then
-		if key == keys.leftShift then
-			local _, key = os.pullEvent("key")
-			if key ~= keys.backspace then
-				window_builder.widgets.textbox.textboxes[textbox_id].text = window_builder.widgets.textbox.textboxes[textbox_id].text .. string.upper(keyword_to_key[keys.getName(key)])
-			end
-		elseif string.len(window_builder.widgets.textbox.textboxes[textbox_id].text) < window_builder.widgets.textbox.textboxes[textbox_id].max_chars then
-			window_builder.widgets.textbox.textboxes[textbox_id].text = window_builder.widgets.textbox.textboxes[textbox_id].text .. keyword_to_key[keys.getName(key)]
+	--TODO
+	-- FIX THIS BS CODE
 	
+	local event, key = os.pullEvent()
+
+	if event == "key" then
+
+		held_keys[key] = true
+		if key == keys.backspace then
+			window_builder.widgets.textbox.textboxes[textbox_id].text = string.sub(window_builder.widgets.textbox.textboxes[textbox_id].text, 1, string.len(window_builder.widgets.textbox.textboxes[textbox_id].text) - 1)
+		elseif string.len(window_builder.widgets.textbox.textboxes[textbox_id].text) < window_builder.widgets.textbox.textboxes[textbox_id].max_chars then
+			if held_keys[keys.leftShift] == true and key ~= keys.leftShift then
+				if key ~= keys.backspace then
+					window_builder.widgets.textbox.textboxes[textbox_id].text = window_builder.widgets.textbox.textboxes[textbox_id].text .. string.upper(keyword_to_key[keys.getName(key)])
+				end
+			elseif string.len(window_builder.widgets.textbox.textboxes[textbox_id].text) < window_builder.widgets.textbox.textboxes[textbox_id].max_chars then
+				window_builder.widgets.textbox.textboxes[textbox_id].text = window_builder.widgets.textbox.textboxes[textbox_id].text .. keyword_to_key[keys.getName(key)]
+		
+			end
 		end
+	elseif event == "key_up" then
+		held_keys[key] = false
 	end
+	
 end
 -- return the table to be used a as module in another file
 return window_builder
