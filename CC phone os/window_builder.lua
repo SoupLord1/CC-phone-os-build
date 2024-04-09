@@ -16,6 +16,9 @@ window_builder.main_gui = {} -- store main gui components here
 window_builder.widgets.textbox = {}
 window_builder.widgets.textbox.textboxes = {}
 
+window_builder.widgets.textlabel = {}
+window_builder.widgets.textlabel.textlabels = {}
+
 window_builder.default.height = 26
 window_builder.default.width = 19
 
@@ -29,8 +32,11 @@ end
 
 function window_builder.main_gui.gui()
 	paintutils.drawFilledBox(1, 1, screen["width"], 1, colors.gray)
-	
 
+	term.setBackgroundColor(colors.gray)
+	term.setCursorPos(1, 1)
+	term.write("OS v1.0")
+	
 	paintutils.drawFilledBox(1, screen["height"], screen["width"], screen["height"], colors.gray)
 	paintutils.drawFilledBox(screen["width"]/2-3, screen["height"], screen["width"]/2+3, screen["height"], colors.lightGray)
 
@@ -38,11 +44,33 @@ end
 
 function window_builder.main_gui.update()
 	term.setBackgroundColor(colors.gray)
-	term.setCursorPos(1, 1)
-	term.write("OS v1.0")
-
 	term.setCursorPos(screen["width"]-10,1)
 	term.write(os.date("%r"))
+end
+
+function window_builder.main_gui.clear_screen(x,y,w,h,color)
+	paintutils.drawFilledBox(x,y,x+w,y+h,color)
+end
+
+function window_builder.widgets.textlabel.create_textlabel(textlabel_id, text)
+	window_builder.widgets.textlabel.textlabels[textlabel_id] = {text=text}
+end
+
+function window_builder.widgets.textlabel.draw_textlabel(x, y, textlabel_id, bgcolor, color)
+	term.setBackgroundColor(bgcolor)
+	term.setTextColor(color)
+
+	for i = 0, string.len(window_builder.widgets.textlabel.textlabels[textlabel_id].text)-1, 1 do
+		term.setCursorPos(x+i, y)
+		term.write(" ")
+	end
+
+	term.setCursorPos(x, y)
+	term.write(window_builder.widgets.textlabel.textlabels[textlabel_id].text)
+end
+
+function window_builder.widgets.textlabel.update_textlabel(textlabel_id, text)
+	window_builder.widgets.textlabel.textlabels[textlabel_id].text = text
 end
 
 function window_builder.widgets.textbox.create_textbox(textbox_id, max_chars)

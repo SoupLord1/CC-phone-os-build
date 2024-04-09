@@ -7,10 +7,16 @@ function os_main()
     end
 end
 
+
 function events_main()
     while true do
         wb.widgets.textbox.update_textbox("input_1")
-        wb.widgets.textbox.draw_textbox(5, 5, "input_1", colors.black, colors.white)
+        if wb.widgets.textbox.textboxes["input_1"].text ~= "Hello" then
+            wb.widgets.textbox.draw_textbox(6, 5, "input_1", colors.black, colors.white)
+            wb.widgets.textlabel.draw_textlabel(1, 5, "Name", colors.black, colors.white)
+        else
+            wb.main_gui.clear_screen(1, 5, screen["width"], 0, colors.black)
+        end
     end
 end
 
@@ -29,6 +35,7 @@ term.setCursorPos(1, 1)
 
 wb.main_gui.gui()
 
-wb.widgets.textbox.create_textbox("input_1", 20)
+wb.widgets.textbox.create_textbox("input_1", 10)
+wb.widgets.textlabel.create_textlabel("Name", "Name:")
 
 parallel.waitForAny(os_main, events_main)
