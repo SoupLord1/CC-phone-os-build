@@ -80,11 +80,10 @@ function window_builder.widgets.textbox.update_textbox(textbox_id)
 		if key == keys.backspace then
 			window_builder.widgets.textbox.textboxes[textbox_id].text = string.sub(window_builder.widgets.textbox.textboxes[textbox_id].text, 1, string.len(window_builder.widgets.textbox.textboxes[textbox_id].text) - 1)
 		elseif string.len(window_builder.widgets.textbox.textboxes[textbox_id].text) < window_builder.widgets.textbox.textboxes[textbox_id].max_chars then
-			if held_keys[keys.leftShift] == true and key ~= keys.leftShift then
-				if key ~= keys.backspace then
-					window_builder.widgets.textbox.textboxes[textbox_id].text = window_builder.widgets.textbox.textboxes[textbox_id].text .. string.upper(keyword_to_key[keys.getName(key)])
-				end
-			elseif string.len(window_builder.widgets.textbox.textboxes[textbox_id].text) < window_builder.widgets.textbox.textboxes[textbox_id].max_chars then
+			if held_keys[keys.leftShift] == true and key ~= keys.leftShift and key ~= keys.backspace then
+				window_builder.widgets.textbox.textboxes[textbox_id].text = window_builder.widgets.textbox.textboxes[textbox_id].text .. string.upper(keyword_to_key[keys.getName(key)])
+
+			else
 				window_builder.widgets.textbox.textboxes[textbox_id].text = window_builder.widgets.textbox.textboxes[textbox_id].text .. keyword_to_key[keys.getName(key)]
 		
 			end

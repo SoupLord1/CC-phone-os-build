@@ -11,7 +11,6 @@ function events_main()
     while true do
         wb.widgets.textbox.update_textbox("input_1")
         wb.widgets.textbox.draw_textbox(5, 5, "input_1", colors.black, colors.white)
-        sleep(0.01)
     end
 end
 

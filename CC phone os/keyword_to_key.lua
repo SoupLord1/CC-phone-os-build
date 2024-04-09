@@ -44,6 +44,7 @@ local keyword_to_key = {
     comma=",",
     equals="=",
     leftBracket="[",
+    leftShift="",
     minus="-",
     multiply="*",
     numPad0=0,
