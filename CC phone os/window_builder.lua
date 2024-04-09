@@ -70,7 +70,7 @@ held_keys[keys.leftShift] = false
 function window_builder.widgets.textbox.update_textbox(textbox_id)
 
 	--TODO
-	-- FIX THIS BS CODE
+	-- fix bug where ctrl, alt and more will crash os
 	
 	local event, key = os.pullEvent()
 

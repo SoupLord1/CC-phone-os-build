@@ -29,6 +29,6 @@ term.setCursorPos(1, 1)
 
 wb.main_gui.gui()
 
-wb.widgets.textbox.create_textbox("input_1", 10)
+wb.widgets.textbox.create_textbox("input_1", 20)
 
 parallel.waitForAny(os_main, events_main)
