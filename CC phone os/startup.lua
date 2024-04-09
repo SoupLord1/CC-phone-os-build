@@ -17,10 +17,9 @@ term.clear()
 
 term.setCursorPos(1, 1)
 
-wb.widgets.navbar(1, 4, colors.red)
-
-wb.widgets.navbar(8, 5, colors.blue)
+wb.main_gui.gui()
 
 while true do
+    wb.main_gui.update()
     sleep(0.01)
 end
