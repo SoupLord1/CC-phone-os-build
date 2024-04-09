@@ -3,6 +3,9 @@
 
 
 -- define a table for the functions to be stored in
+
+local keyword_to_key = require("keyword_to_key")
+
 local window_builder = {}
 
 window_builder.default = {} -- default values stored here
@@ -62,11 +65,20 @@ function window_builder.widgets.textbox.draw_textbox(x, y, textbox_id, bgcolor, 
 end
 
 function window_builder.widgets.textbox.update_textbox(textbox_id)
-	local _, key = os.pullEvent("key")
+
+	local event, key = os.pullEvent()
 	if key == keys.backspace then
 		window_builder.widgets.textbox.textboxes[textbox_id].text = string.sub(window_builder.widgets.textbox.textboxes[textbox_id].text, 1, string.len(window_builder.widgets.textbox.textboxes[textbox_id].text) - 1)
 	elseif string.len(window_builder.widgets.textbox.textboxes[textbox_id].text) < window_builder.widgets.textbox.textboxes[textbox_id].max_chars then
-		window_builder.widgets.textbox.textboxes[textbox_id].text = window_builder.widgets.textbox.textboxes[textbox_id].text..keys.getName(key)
+		if key == keys.leftShift then
+			local _, key = os.pullEvent("key")
+			if key ~= keys.backspace then
+				window_builder.widgets.textbox.textboxes[textbox_id].text = window_builder.widgets.textbox.textboxes[textbox_id].text .. string.upper(keyword_to_key[keys.getName(key)])
+			end
+		elseif string.len(window_builder.widgets.textbox.textboxes[textbox_id].text) < window_builder.widgets.textbox.textboxes[textbox_id].max_chars then
+			window_builder.widgets.textbox.textboxes[textbox_id].text = window_builder.widgets.textbox.textboxes[textbox_id].text .. keyword_to_key[keys.getName(key)]
+	
+		end
 	end
 end
 -- return the table to be used a as module in another file
