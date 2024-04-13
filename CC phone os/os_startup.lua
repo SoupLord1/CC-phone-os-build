@@ -12,15 +12,32 @@ end
 
 local main = basalt.createFrame()
 
-local topBar = main:addFrame():setPosition(1,1):setSize("parent.w", 1):setBackground(colors.gray):setForeground(colors.white)
+-- LOCK SCREEN
+local lock_screen = main:addFrame():setSize("parent.w", "parent.h")
+
+local topBar_ls = lock_screen:addFrame():setPosition(1,1):setSize("parent.w", 1):setBackground(colors.gray):setForeground(colors.white)
+local versionLabel_ls = topBar_ls:addLabel():setText("OS v1.0"):setPosition(2, 1)
+local Clock_ls = topBar_ls:addLabel():setText("Tempclock"):setPosition("parent.w-11", 1)
+
+local desktop_ls = lock_screen:addFrame():setPosition(1, 2):setSize("parent.w", "parent.h-2"):setBackground(colors.black)
+
+local bottomBar_ls = lock_screen:addFrame():setPosition(1,"parent.h"):setSize("parent.w", 1):setBackground(colors.gray):setForeground(colors.white)
+local exit_button_ls = bottomBar_ls:addButton():setText("Exit"):setBackground(colors.lightGray):setSize(6,1):setPosition("parent.w/2-self.w/2",1):onClick(exitOs)
+-- LOCK SCREEN END
+
+-- MAIN OS
+local main_os = main:addFrame():setSize("parent.w", "parent.h"):hide()
+
+local topBar = main_os:addFrame():setPosition(1,1):setSize("parent.w", 1):setBackground(colors.gray):setForeground(colors.white)
 local versionLabel = topBar:addLabel():setText("OS v1.0"):setPosition(2, 1)
 local Clock = topBar:addLabel():setText("Tempclock"):setPosition("parent.w-11", 1)
 
-local desktop = main:addFrame():setPosition(1, 2):setSize("parent.w", "parent.h-2"):setBackground(colors.black)
+local desktop = main_os:addFrame():setPosition(1, 2):setSize("parent.w", "parent.h-2"):setBackground(colors.black)
 
-local bottomBar = main:addFrame():setPosition(1,"parent.h"):setSize("parent.w", 1):setBackground(colors.gray):setForeground(colors.white)
+local bottomBar = main_os:addFrame():setPosition(1,"parent.h"):setSize("parent.w", 1):setBackground(colors.gray):setForeground(colors.white)
 local exit_button = bottomBar:addButton():setText("Exit"):setBackground(colors.lightGray):setSize(6, 1):setPosition(1,1):onClick(exitOs)
 local home_button = bottomBar:addButton():setText("Home"):setBackground(colors.lightGray):setSize(6,1):setPosition("parent.w/2-self.w/2",1)
+-- MAIN OS END
 
 local app_loader = require("app_loader")
 local apps = app_loader.get_default_apps()
@@ -97,11 +114,20 @@ local function clockTick()
     end
 end
 
-local clockThread = main:addThread()
+local function clockTick_ls()
+    while true do
+        Clock_ls:setText(os.date("%r"))
+        sleep(0.01)
+    end
+end
+
+local clockThread = main_os:addThread()
+local clockThread_ls = lock_screen:addThread()
 
 --local imageThread = main:addThread()
 
 clockThread:start(clockTick)
+clockThread_ls:start(clockTick_ls)
 --imageThread:start(updateImages)
 
 basalt.autoUpdate()
