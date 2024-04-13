@@ -1,8 +1,5 @@
 local basalt = require("basalt")
 
-local app_loader = require("app_loader")
-local apps = app_loader.get_apps()
-
 local function getImageFromString(filepath)
     local imageString = fs.open("test.bimg", "r")
     local image = loadstring("return"..imageString:readAll())()
@@ -25,17 +22,43 @@ local bottomBar = main:addFrame():setPosition(1,"parent.h"):setSize("parent.w", 
 local exit_button = bottomBar:addButton():setText("Exit"):setBackground(colors.lightGray):setSize(6, 1):setPosition(1,1):onClick(exitOs)
 local home_button = bottomBar:addButton():setText("Home"):setBackground(colors.lightGray):setSize(6,1):setPosition("parent.w/2-self.w/2",1)
 
+local app_loader = require("app_loader")
+local apps = app_loader.get_default_apps()
+
 local app_slots = {}
 app_slots["app_frame"] = {}
 app_slots["slot_handle"] = {}
-for i = 1, #apps do
-    app_slots["app_frame"][i] = apps[i]["handle"](desktop):hide()
-end
-for i = 1, #app_slots["app_frame"] do
-    app_slots["slot_handle"][i] = {icon = desktop:addImage():setPosition(6*(i-1) + 3,2):setImage(apps[i]["icon"]):onClick(function () app_slots["app_frame"][i]:show(); end), name = desktop:addLabel():setText(apps[i]["name"]):setPosition(6*(i-1) + 3,5):setForeground(colors.white)}
+app_slots["app_frame_2"] = {}
+app_slots["slot_handle_2"] = {}
+
+local spacing = {w = 8, h = 6}
+local offset = {w = 4, h = 2}
+
+for i = 1, #apps.appsL1 do
+    app_slots["app_frame"][i] = apps.appsL1[i]["app"](desktop):hide()
 end
 
+for i = 1, #app_slots["app_frame"] do
+    app_slots["slot_handle"][i] = {icon = desktop:addImage():setPosition(spacing.w*(i-1) + offset.w, offset.h):setImage(apps.appsL1[i]["icon"]):onClick(function () app_slots["app_frame"][i]:show(); end),
+    nameL1 = desktop:addLabel():setText(apps.appsL1[i]["name"]["nameL1"]):setPosition(spacing.w*(i-1) + offset.w - (string.len(apps.appsL1[i]["name"]["nameL1"])-5)/2,3 + offset.h ):setForeground(colors.white),
+    nameL2 = desktop:addLabel():setText(apps.appsL1[i]["name"]["nameL2"]):setPosition(spacing.w*(i-1) + offset.w - (string.len(apps.appsL1[i]["name"]["nameL2"])-5)/2,4 + offset.h ):setForeground(colors.white)}
+end
+
+for i = 1, #apps.appsL2 do
+    app_slots["app_frame_2"][i] = apps.appsL2[i]["app"](desktop):hide()
+end
+for i = 1, #app_slots["app_frame_2"] do
+    app_slots["slot_handle_2"][i] = {icon = desktop:addImage():setPosition(spacing.w*(i-1) + offset.w, offset.h + spacing.h):setImage(apps.appsL2[i]["icon"]):onClick(function () app_slots["app_frame_2"][i]:show(); end),
+    nameL1 = desktop:addLabel():setText(apps.appsL2[i]["name"]["nameL1"]):setPosition(spacing.w*(i-1) + offset.w - (string.len(apps.appsL2[i]["name"]["nameL1"])-5)/2,3 + offset.h + spacing.h):setForeground(colors.white),
+    nameL2 = desktop:addLabel():setText(apps.appsL2[i]["name"]["nameL2"]):setPosition(spacing.w*(i-1) + offset.w - (string.len(apps.appsL2[i]["name"]["nameL2"])-5)/2,4 + offset.h + spacing.h):setForeground(colors.white)}
+end
+
+
 local function home()
+    for i = 1, #app_slots["app_frame_2"] do
+        app_slots["app_frame_2"][i]:hide()
+    end
+
     for i = 1, #app_slots["app_frame"] do
         app_slots["app_frame"][i]:hide()
     end
