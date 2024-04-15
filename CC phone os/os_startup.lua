@@ -15,7 +15,7 @@ local main = basalt.createFrame()
 
 
 -- LOCK SCREEN
-local lock_screen = main:addFrame():setSize("parent.w", "parent.h"):hide()
+local lock_screen = main:addFrame():setSize("parent.w", "parent.h")
 
 local topBar_ls = lock_screen:addFrame():setPosition(1,1):setSize("parent.w", 1):setBackground(colors.gray):setForeground(colors.white)
 local versionLabel_ls = topBar_ls:addLabel():setText("OS v1.0"):setPosition(2, 1)
@@ -23,36 +23,35 @@ local Clock_ls = topBar_ls:addLabel():setText("Tempclock"):setPosition("parent.w
 
 local desktop_ls = lock_screen:addFrame():setPosition(1, 2):setSize("parent.w", "parent.h-2"):setBackground(colors.black)
 
-local passFrame = desktop_ls:addFrame():setPosition("parent.w/2-self.w/2", "parent.h/2-self.h/2"):setBackground(colors.gray):setSize("parent.w/3", "parent.h/3")
+local passFrame = desktop_ls:addFrame():setSize("parent.w/3", "parent.h/3 + 2"):setPosition("parent.w/2-self.w/2", "parent.h/2-self.h/2"):setBackground(colors.gray)
 local passLabel = passFrame:addLabel():setText(" Password:"):setPosition("parent.w/2-self.w/2", "parent.h/2-self.h/2"):setForeground(colors.white)
 local passInput = passFrame:addInput():setInputType("password"):setInputLimit(12):setPosition("parent.w/2-self.w/2", "parent.h/2-self.h/2+1"):setForeground(colors.white)
-local passReponse = passFrame:addLabel():setText(""):setPosition():setPosition("parent.w/2-self.w/2", "parent.h/2-self.h/2+3"):setForeground(colors.white)
+local pass_submit = passFrame:addButton():setText("Submit"):setPosition("parent.w/2-self.w/2", "parent.h/2+3"):setSize(8, 1):setBackground(colors.lightGray)
+local passReponse = passFrame:addLabel():setText(""):setPosition("parent.w/2-self.w/2", "parent.h/2+2"):setForeground(colors.white)
 
 local bottomBar_ls = lock_screen:addFrame():setPosition(1,"parent.h"):setSize("parent.w", 1):setBackground(colors.gray):setForeground(colors.white)
 local exit_button_ls = bottomBar_ls:addButton():setText("Exit"):setBackground(colors.lightGray):setSize(6,1):setPosition("parent.w/2-self.w/2",1):onClick(exitOs)
 -- LOCK SCREEN END
 
-local main_os = main:addFrame():setSize("parent.w", "parent.h"):show()--:hide()
+local main_os = main:addFrame():setSize("parent.w", "parent.h"):hide()
 
-local sha2 = require("modules.sha2.sha2")
-local function enterPass(self, event, key)
-    if key == 28 then
-        local password = getFileContents("os/default_apps/storage/settings/password.txt")
-        local entered_password = sha2.sha224(passInput:getValue())
-        
-        if password == entered_password then
-            passInput:setValue("")
-            lock_screen:hide()
-            main_os:show()
-        else
-            passInput:setValue("")
-            passReponse:setText("Incorrect"):setForeground(colors.red)
-        end
 
+local function enterPass()
+    local sha2 = require("modules.sha2.sha2")
+    local password = getFileContents("os/default_apps/storage/settings/password.txt")
+    local entered_password = sha2.sha224(passInput:getValue())
+    if password == entered_password then
+        passInput:setValue("")
+        lock_screen:hide()
+        main_os:show()
+    else
+        passInput:setValue("")
+        passReponse:setText("Incorrect"):setForeground(colors.red)
     end
+
   end
 
-passInput:onKey(enterPass)
+pass_submit:onClick(enterPass)
 
 local function Logout()
     lock_screen:show()
