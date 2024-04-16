@@ -37,4 +37,4 @@ local function write_hash(text, filepath)
     file.close()
 end
 
-write_hash("test", "os/test.txt")
+write_hash("server-check", "os/test.txt")
