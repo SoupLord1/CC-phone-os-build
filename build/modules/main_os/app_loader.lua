@@ -8,13 +8,18 @@ local function getTableFromString(filepath)
 end
 
 function app_loader.get_default_apps()
-    local app_files = fs.list("os/default_apps/setup/")
+    local default_app_files = fs.list("os/default_apps/setup/")
+    local app_files = fs.list("os/apps/setup/")
     local app_setups = {}
     local apps = {}
     
     apps.appsL1, apps.appsL2 = {}, {}
+    for i = 1, #default_app_files do
+        app_setups[i] = getTableFromString("os/default_apps/setup/"..default_app_files[i])
+    end
+
     for i = 1, #app_files do
-        app_setups[i] = getTableFromString("os/default_apps/setup/"..app_files[i])
+        app_setups[i + #default_app_files] = getTableFromString("os/apps/setup/"..app_files[i])
     end
 
     for i = 1, #app_setups do

@@ -13,28 +13,33 @@ return function(desktop)
 
     local appearance = app:addFrame():setBackground(colors.gray):setPosition("parent.w/4", 1):setSize("parent.w/4 * 3 + 1", "parent.h"):hide()
 
+    local dev = app:addFrame():setBackground(colors.black):setPosition("parent.w/4", 1):setSize("parent.w/4 * 3 + 1", "parent.h"):hide()
+    local dev_shell = dev:addProgram()
+    dev_shell:execute("shell")
     
     settings_bar:addItem("General"):setBackground(colors.lightGray)
     settings_bar:addItem("User"):setBackground(colors.lightGray)
     settings_bar:addItem("Appearance"):setBackground(colors.lightGray)
+    settings_bar:addItem("Dev shell"):setBackground(colors.lightGray)
 
 
 
     settings_bar:onSelect(function(self, event, item)
+        general:hide()
+        user:hide()
+        appearance:hide()
+        dev:hide()
         if item.text == "General" then
             general:show()
-            user:hide()
-            appearance:hide()
         end
         if item.text == "User" then
-            general:hide()
             user:show()
-            appearance:hide()
         end
         if item.text == "Appearance" then
-            general:hide()
-            user:hide()
             appearance:show()
+        end
+        if item.text == "Dev shell" then
+            dev:show()
         end
         
     end)

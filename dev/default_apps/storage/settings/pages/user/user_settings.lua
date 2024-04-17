@@ -18,19 +18,22 @@ return function(user_settings)
     local current_username = file.readAll()
     file.close()
 
-    local function change_username()
-        local file = fs.open("os/default_apps/storage/settings/data/username.txt", "w")
-        file.write(new_username:getValue())
-        file.close()
-    end
 
-    change_username_button:onClick(change_username)
 
     local current_username_label = user_settings:addLabel():setText(current_username):setPosition(11, 6):setForeground(colors.white)
 
+    local username_response = user_settings:addLabel():setPosition(2, 10)
 
-    local username = user_settings:addInput():setInputType("password"):setInputLimit(12):setPosition(15, 10):setForeground(colors.white)
-    
-    local back_button = user_settings:addButton():setText("Back"):setSize(6, 1):setPosition(2, "parent.h - 1"):onClick(function() user_settings:hide() end)
+    local back_button = user_settings:addButton():setText("Back"):setSize(6, 1):setPosition(2, "parent.h - 1"):onClick(function() username_response:setText(""); user_settings:hide() end)
 
+    local function change_username()
+        current_username_label:setText(new_username:getValue())
+        username_response:setText("Username Changed!"):setForeground(colors.green)
+        local file = fs.open("os/default_apps/storage/settings/data/username.txt", "w")
+        file.write(new_username:getValue())
+        file.close()
+        new_username:setValue("")
+    end
+
+    change_username_button:onClick(change_username)
 end
