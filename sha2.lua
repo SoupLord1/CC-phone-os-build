@@ -1,8 +1,75 @@
+--------------------------------------------------------------------------------------------------------------------------
+-- sha2.lua
+--------------------------------------------------------------------------------------------------------------------------
+-- VERSION: 12 (2022-02-23)
+-- AUTHOR:  Egor Skriptunoff
+-- LICENSE: MIT (the same license as Lua itself)
+-- URL:     https://github.com/Egor-Skriptunoff/pure_lua_SHA
+--
+-- DESCRIPTION:
+--    This module contains functions to calculate SHA digest:
+--       MD5, SHA-1,
+--       SHA-224, SHA-256, SHA-512/224, SHA-512/256, SHA-384, SHA-512,
+--       SHA3-224, SHA3-256, SHA3-384, SHA3-512, SHAKE128, SHAKE256,
+--       HMAC,
+--       BLAKE2b, BLAKE2s, BLAKE2bp, BLAKE2sp, BLAKE2Xb, BLAKE2Xs,
+--       BLAKE3, BLAKE3_KDF
+--    Written in pure Lua.
+--    Compatible with:
+--       Lua 5.1, Lua 5.2, Lua 5.3, Lua 5.4, Fengari, LuaJIT 2.0/2.1 (any CPU endianness).
+--    Main feature of this module: it was heavily optimized for speed.
+--    For every Lua version the module contains particular implementation branch to get benefits from version-specific features.
+--       - branch for Lua 5.1 (emulating bitwise operators using look-up table)
+--       - branch for Lua 5.2 (using bit32/bit library), suitable for both Lua 5.2 with native "bit32" and Lua 5.1 with external library "bit"
+--       - branch for Lua 5.3/5.4 (using native 64-bit bitwise operators)
+--       - branch for Lua 5.3/5.4 (using native 32-bit bitwise operators) for Lua built with LUA_INT_TYPE=LUA_INT_INT
+--       - branch for LuaJIT without FFI library (useful in a sandboxed environment)
+--       - branch for LuaJIT x86 without FFI library (LuaJIT x86 has oddity because of lack of CPU registers)
+--       - branch for LuaJIT 2.0 with FFI library (bit.* functions work only with Lua numbers)
+--       - branch for LuaJIT 2.1 with FFI library (bit.* functions can work with "int64_t" arguments)
+--
+--
+-- USAGE:
+--    Input data should be provided as a binary string: either as a whole string or as a sequence of substrings (chunk-by-chunk loading, total length < 9*10^15 bytes).
+--    Result (SHA digest) is returned in hexadecimal representation as a string of lowercase hex digits.
+--    Simplest usage example:
+--       local sha = require("sha2")
+--       local your_hash = sha.sha256("your string")
+--    See file "sha2_test.lua" for more examples.
+--
+--
+-- CHANGELOG:
+--  version     date      description
+--  -------  ----------   -----------
+--    12     2022-02-23   Now works in Luau (but NOT optimized for speed)
+--    11     2022-01-09   BLAKE3 added
+--    10     2022-01-02   BLAKE2 functions added
+--     9     2020-05-10   Now works in OpenWrt's Lua (dialect of Lua 5.1 with "double" + "invisible int32")
+--     8     2019-09-03   SHA-3 functions added
+--     7     2019-03-17   Added functions to convert to/from base64
+--     6     2018-11-12   HMAC added
+--     5     2018-11-10   SHA-1 added
+--     4     2018-11-03   MD5 added
+--     3     2018-11-02   Bug fixed: incorrect hashing of long (2 GByte) data streams on Lua 5.3/5.4 built with "int32" integers
+--     2     2018-10-07   Decreased module loading time in Lua 5.1 implementation branch (thanks to Peter Melnichenko for giving a hint)
+--     1     2018-10-06   First release (only SHA-2 functions)
+-----------------------------------------------------------------------------
+
 
 local print_debug_messages = false  -- set to true to view some messages about your system's abilities and implementation branch chosen for your system
+
 local unpack, table_concat, byte, char, string_rep, sub, gsub, gmatch, string_format, floor, ceil, math_min, math_max, tonumber, type, math_huge =
    table.unpack or unpack, table.concat, string.byte, string.char, string.rep, string.sub, string.gsub, string.gmatch, string.format, math.floor, math.ceil, math.min, math.max, tonumber, type, math.huge
+
+
+--------------------------------------------------------------------------------
+-- EXAMINING YOUR SYSTEM
+--------------------------------------------------------------------------------
+
 local function get_precision(one)
+   -- "one" must be either float 1.0 or integer 1
+   -- returns bits_precision, is_integer
+   -- This function works correctly with all floating point datatypes (including non-IEEE-754)
    local k, n, m, prev_n = 0, one, one
    while true do
       k, prev_n, n, m = k + 1, n, n + n + 1, m + m + k % 2
@@ -13,22 +80,55 @@ local function get_precision(one)
       end
    end
 end
+
+-- Make sure Lua has "double" numbers
 local x = 2/3
 local Lua_has_double = x * 5 > 3 and x * 4 < 3 and get_precision(1.0) >= 53
 assert(Lua_has_double, "at least 53-bit floating point numbers are required")
+
+-- Q:
+--    SHA2 was designed for FPU-less machines.
+--    So, why floating point numbers are needed for this module?
+-- A:
+--    53-bit "double" numbers are useful to calculate "magic numbers" used in SHA.
+--    I prefer to write 50 LOC "magic numbers calculator" instead of storing more than 200 constants explicitly in this source file.
+
 local int_prec, Lua_has_integers = get_precision(1)
 local Lua_has_int64 = Lua_has_integers and int_prec == 64
 local Lua_has_int32 = Lua_has_integers and int_prec == 32
 assert(Lua_has_int64 or Lua_has_int32 or not Lua_has_integers, "Lua integers must be either 32-bit or 64-bit")
+
+-- Q:
+--    Does it mean that almost all non-standard configurations are not supported?
+-- A:
+--    Yes.  Sorry, too many problems to support all possible Lua numbers configurations.
+--       Lua 5.1/5.2    with "int32"               will not work.
+--       Lua 5.1/5.2    with "int64"               will not work.
+--       Lua 5.1/5.2    with "int128"              will not work.
+--       Lua 5.1/5.2    with "float"               will not work.
+--       Lua 5.1/5.2    with "double"              is OK.          (default config for Lua 5.1, Lua 5.2, LuaJIT)
+--       Lua 5.3/5.4    with "int32"  + "float"    will not work.
+--       Lua 5.3/5.4    with "int64"  + "float"    will not work.
+--       Lua 5.3/5.4    with "int128" + "float"    will not work.
+--       Lua 5.3/5.4    with "int32"  + "double"   is OK.          (config used by Fengari)
+--       Lua 5.3/5.4    with "int64"  + "double"   is OK.          (default config for Lua 5.3, Lua 5.4)
+--       Lua 5.3/5.4    with "int128" + "double"   will not work.
+--   Using floating point numbers better than "double" instead of "double" is OK (non-IEEE-754 floating point implementation are allowed).
+--   Using "int128" instead of "int64" is not OK: "int128" would require different branch of implementation for optimized SHA512.
+
+-- Check for LuaJIT and 32-bit bitwise libraries
 local is_LuaJIT = ({false, [1] = true})[1] and _VERSION ~= "Luau" and (type(jit) ~= "table" or jit.version_num >= 20000)  -- LuaJIT 1.x.x and Luau are treated as vanilla Lua 5.1/5.2
 local is_LuaJIT_21  -- LuaJIT 2.1+
 local LuaJIT_arch
 local ffi           -- LuaJIT FFI library (as a table)
 local b             -- 32-bit bitwise library (as a table)
 local library_name
+
 if is_LuaJIT then
+   -- Assuming "bit" library is always available on LuaJIT
    b = require"bit"
    library_name = "bit"
+   -- "ffi" is intentionally disabled on some systems for safety reason
    local LuaJIT_has_FFI, result = pcall(require, "ffi")
    if LuaJIT_has_FFI then
       ffi = result
@@ -36,6 +136,7 @@ if is_LuaJIT then
    is_LuaJIT_21 = not not loadstring"b=0b0"
    LuaJIT_arch = type(jit) == "table" and jit.arch or ffi and ffi.arch or nil
 else
+   -- For vanilla Lua, "bit"/"bit32" libraries are searched in global namespace only.  No attempt is made to load a library if it's not loaded yet.
    for _, libname in ipairs(_VERSION == "Lua 5.2" and {"bit32", "bit"} or {"bit", "bit32"}) do
       if type(_G[libname]) == "table" and _G[libname].bxor then
          b = _G[libname]
@@ -44,12 +145,27 @@ else
       end
    end
 end
+
+--------------------------------------------------------------------------------
+-- You can disable here some of your system's abilities (for testing purposes)
+--------------------------------------------------------------------------------
+-- is_LuaJIT = nil
+-- is_LuaJIT_21 = nil
+-- ffi = nil
+-- Lua_has_int32 = nil
+-- Lua_has_int64 = nil
+-- b, library_name = nil
+--------------------------------------------------------------------------------
+
 if print_debug_messages then
+   -- Printing list of abilities of your system
    print("Abilities:")
    print("   Lua version:               "..(is_LuaJIT and "LuaJIT "..(is_LuaJIT_21 and "2.1 " or "2.0 ")..(LuaJIT_arch or "")..(ffi and " with FFI" or " without FFI") or _VERSION))
    print("   Integer bitwise operators: "..(Lua_has_int64 and "int64" or Lua_has_int32 and "int32" or "no"))
    print("   32-bit bitwise library:    "..(library_name or "not found"))
 end
+
+-- Selecting the most suitable implementation for given set of abilities
 local method, branch
 if is_LuaJIT and ffi then
    method = "Using 'ffi' library of LuaJIT"
@@ -70,12 +186,28 @@ else
    method = "Emulating bitwise operators using look-up table"
    branch = "EMUL"
 end
+
 if print_debug_messages then
+   -- Printing the implementation selected to be used on your system
    print("Implementation selected:")
    print("   "..method)
 end
+
+
+--------------------------------------------------------------------------------
+-- BASIC 32-BIT BITWISE FUNCTIONS
+--------------------------------------------------------------------------------
+
 local AND, OR, XOR, SHL, SHR, ROL, ROR, NOT, NORM, HEX, XOR_BYTE
+-- Only low 32 bits of function arguments matter, high bits are ignored
+-- The result of all functions (except HEX) is an integer inside "correct range":
+--    for "bit" library:    (-2^31)..(2^31-1)
+--    for "bit32" library:        0..(2^32-1)
+
 if branch == "FFI" or branch == "LJ" or branch == "LIB32" then
+
+   -- Your system has 32-bit bitwise library (either "bit" or "bit32")
+
    AND  = b.band                -- 2 arguments
    OR   = b.bor                 -- 2 arguments
    XOR  = b.bxor                -- 2..5 arguments
@@ -90,23 +222,30 @@ if branch == "FFI" or branch == "LJ" or branch == "LIB32" then
    XOR_BYTE = XOR               -- XOR of two bytes (0..255)
 
 elseif branch == "EMUL" then
+
+   -- Emulating 32-bit bitwise operations using 53-bit floating point arithmetic
+
    function SHL(x, n)
       return (x * 2^n) % 2^32
    end
+
    function SHR(x, n)
       x = x % 2^32 / 2^n
       return x - x % 1
    end
+
    function ROL(x, n)
       x = x % 2^32 * 2^n
       local r = x % 2^32
       return r + (x - r) / 2^32
    end
+
    function ROR(x, n)
       x = x % 2^32 / 2^n
       local r = x % 1
       return r * 2^32 + (x - r)
    end
+
    local AND_of_two_bytes = {[0] = 0}  -- look-up table (256*256 entries)
    local idx = 0
    for y = 0, 127 * 256, 256 do
@@ -120,7 +259,9 @@ elseif branch == "EMUL" then
       end
       idx = idx + 256
    end
+
    local function and_or_xor(x, y, operation)
+      -- operation: nil = AND, 1 = OR, 2 = XOR
       local x0 = x % 2^32
       local y0 = y % 2^32
       local rx = x0 % 256
@@ -141,12 +282,15 @@ elseif branch == "EMUL" then
       end
       return res
    end
+
    function AND(x, y)
       return and_or_xor(x, y)
    end
+
    function OR(x, y)
       return and_or_xor(x, y, 1)
    end
+
    function XOR(x, y, z, t, u)          -- 2..5 arguments
       if z then
          if t then
@@ -159,10 +303,13 @@ elseif branch == "EMUL" then
       end
       return and_or_xor(x, y, 2)
    end
+
    function XOR_BYTE(x, y)
       return x + y - 2 * AND_of_two_bytes[x + y * 256]
    end
+
 end
+
 HEX = HEX
    or
       pcall(string_format, "%x", 2^31) and
@@ -173,13 +320,24 @@ HEX = HEX
       function (x)  -- for OpenWrt's dialect of Lua
          return string_format("%08x", (x + 2^31) % 2^32 - 2^31)
       end
+
 local function XORA5(x, y)
    return XOR(x, y or 0xA5A5A5A5) % 4294967296
 end
+
 local function create_array_of_lanes()
    return {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
 end
-local sha256_feed_64, sha512_feed_128, md5_feed_64, sha1_feed_64, keccak_feed
+
+
+--------------------------------------------------------------------------------
+-- CREATING OPTIMIZED INNER LOOP
+--------------------------------------------------------------------------------
+
+-- Inner loop functions
+local sha256_feed_64, sha512_feed_128, md5_feed_64, sha1_feed_64, keccak_feed, blake2s_feed_64, blake2b_feed_128, blake3_feed_64
+
+-- Arrays of SHA-2 "magic numbers" (in "INT64" and "FFI" branches "*_lo" arrays contain 64-bit values)
 local sha2_K_lo, sha2_K_hi, sha2_H_lo, sha2_H_hi, sha3_RC_lo, sha3_RC_hi = {}, {}, {}, {}, {}, {}
 local sha2_H_ext256 = {[224] = {}, [256] = sha2_H_hi}
 local sha2_H_ext512_lo, sha2_H_ext512_hi = {[384] = {}, [512] = sha2_H_lo}, {[384] = {}, [512] = sha2_H_hi}
@@ -207,6 +365,7 @@ local perm_blake3 = {
    2, 7, 5, 8, 14, 15, 16, 9,
    2, 7, 5, 8, 14, 15,
 }
+
 local function build_keccak_format(elem)
    local keccak_format = {}
    for _, size in ipairs{1, 9, 13, 17, 18, 21} do
@@ -214,6 +373,8 @@ local function build_keccak_format(elem)
    end
    return keccak_format
 end
+
+
 if branch == "FFI" then
 
    local common_W_FFI_int32 = ffi.new("int32_t[?]", 80)   -- 64 is enough for SHA256, but 80 is needed for SHA-1
@@ -223,7 +384,12 @@ if branch == "FFI" then
    for j = 1, 10 do
       sigma[j] = ffi.new("uint8_t[?]", #sigma[j] + 1, 0, unpack(sigma[j]))
    end;  sigma[11], sigma[12] = sigma[1], sigma[2]
+
+
+   -- SHA256 implementation for "LuaJIT with FFI" branch
+
    function sha256_feed_64(H, str, offs, size)
+      -- offs >= 0, size >= 0, size is multiple of 64
       local W, K = common_W_FFI_int32, sha2_K_hi
       for pos = offs, offs + size - 1, 64 do
          for j = 0, 15 do
@@ -280,6 +446,10 @@ if branch == "FFI" then
       local AND64, OR64, XOR64, NOT64, SHL64, SHR64, ROL64, ROR64  -- introducing synonyms for better code readability
           = AND,   OR,   XOR,   NOT,   SHL,   SHR,   ROL,   ROR
       HEX64 = HEX
+
+
+      -- BLAKE2b implementation for "LuaJIT 2.1 + FFI" branch
+
       do
          local v = ffi.new("int64_t[?]", 16)
          local W = common_W_blake2b
@@ -344,13 +514,21 @@ if branch == "FFI" then
          end
 
       end
+
+
+      -- SHA-3 implementation for "LuaJIT 2.1 + FFI" branch
+
       local arr64_t = ffi.typeof"int64_t[?]"
+      -- lanes array is indexed from 0
       lanes_index_base = 0
       hi_factor_keccak = int64(2^32)
+
       function create_array_of_lanes()
          return arr64_t(30)  -- 25 + 5 for temporary usage
       end
+
       function keccak_feed(lanes, _, str, offs, size, block_size_in_bytes)
+         -- offs >= 0, size >= 0, size is multiple of block_size_in_bytes, block_size_in_bytes is positive multiple of 8
          local RC = sha3_RC_lo
          local qwords_qty = SHR(block_size_in_bytes, 3)
          for pos = offs, offs + size - 1, block_size_in_bytes do
@@ -386,11 +564,19 @@ if branch == "FFI" then
             end
          end
       end
+
+
       local A5_long = 0xA5A5A5A5 * int64(2^32 + 1)  -- It's impossible to use constant 0xA5A5A5A5A5A5A5A5LL because it will raise syntax error on other Lua versions
+
       function XORA5(long, long2)
          return XOR64(long, long2 or A5_long)
       end
+
+
+      -- SHA512 implementation for "LuaJIT 2.1 + FFI" branch
+
       function sha512_feed_128(H, _, str, offs, size)
+         -- offs >= 0, size >= 0, size is multiple of 128
          local W, K = common_W_FFI_int64, sha2_K_lo
          for pos = offs, offs + size - 1, 128 do
             for j = 0, 15 do
@@ -439,10 +625,18 @@ if branch == "FFI" then
             H[8] = h + H[8]
          end
       end
+
    else  -- LuaJIT 2.0 doesn't support 64-bit bitwise operations
 
       local U = ffi.new("union{int64_t i64; struct{int32_t "..(ffi.abi("le") and "lo, hi" or "hi, lo")..";} i32;}[3]")
+      -- this array of unions is used for fast splitting int64 into int32_high and int32_low
+
+      -- "xorrific" 64-bit functions :-)
+      -- int64 input is splitted into two int32 parts, some bitwise 32-bit operations are performed, finally the result is converted to int64
+      -- these functions are needed because bit.* functions in LuaJIT 2.0 don't work with int64_t
+
       local function XORROR64_1(a)
+         -- return XOR64(ROR64(a, 1), ROR64(a, 8), SHR64(a, 7))
          U[0].i64 = a
          local a_lo, a_hi = U[0].i32.lo, U[0].i32.hi
          local t_lo = XOR(SHR(a_lo, 1), SHL(a_hi, 31), SHR(a_lo, 8), SHL(a_hi, 24), SHR(a_lo, 7), SHL(a_hi, 25))
@@ -451,6 +645,7 @@ if branch == "FFI" then
       end
 
       local function XORROR64_2(b)
+         -- return XOR64(ROR64(b, 19), ROL64(b, 3), SHR64(b, 6))
          U[0].i64 = b
          local b_lo, b_hi = U[0].i32.lo, U[0].i32.hi
          local u_lo = XOR(SHR(b_lo, 19), SHL(b_hi, 13), SHL(b_lo, 3), SHR(b_hi, 29), SHR(b_lo, 6), SHL(b_hi, 26))
@@ -459,6 +654,7 @@ if branch == "FFI" then
       end
 
       local function XORROR64_3(e)
+         -- return XOR64(ROR64(e, 14), ROR64(e, 18), ROL64(e, 23))
          U[0].i64 = e
          local e_lo, e_hi = U[0].i32.lo, U[0].i32.hi
          local u_lo = XOR(SHR(e_lo, 14), SHL(e_hi, 18), SHR(e_lo, 18), SHL(e_hi, 14), SHL(e_lo, 23), SHR(e_hi, 9))
@@ -467,6 +663,7 @@ if branch == "FFI" then
       end
 
       local function XORROR64_6(a)
+         -- return XOR64(ROR64(a, 28), ROL64(a, 25), ROL64(a, 30))
          U[0].i64 = a
          local b_lo, b_hi = U[0].i32.lo, U[0].i32.hi
          local u_lo = XOR(SHR(b_lo, 28), SHL(b_hi, 4), SHL(b_lo, 30), SHR(b_hi, 2), SHL(b_lo, 25), SHR(b_hi, 7))
@@ -475,6 +672,7 @@ if branch == "FFI" then
       end
 
       local function XORROR64_4(e, f, g)
+         -- return XOR64(g, AND64(e, XOR64(f, g)))
          U[0].i64 = f
          U[1].i64 = g
          U[2].i64 = e
@@ -487,6 +685,7 @@ if branch == "FFI" then
       end
 
       local function XORROR64_5(a, b, c)
+         -- return XOR64(AND64(XOR64(a, b), c), AND64(a, b))
          U[0].i64 = a
          U[1].i64 = b
          U[2].i64 = c
@@ -499,6 +698,7 @@ if branch == "FFI" then
       end
 
       local function XORROR64_7(a, b, m)
+         -- return ROR64(XOR64(a, b), m), m = 1..31
          U[0].i64 = a
          U[1].i64 = b
          local a_lo, a_hi = U[0].i32.lo, U[0].i32.hi
@@ -510,6 +710,7 @@ if branch == "FFI" then
       end
 
       local function XORROR64_8(a, b)
+         -- return ROL64(XOR64(a, b), 1)
          U[0].i64 = a
          U[1].i64 = b
          local a_lo, a_hi = U[0].i32.lo, U[0].i32.hi
@@ -4617,6 +4818,792 @@ local function hmac(hash_func, key, message)
    end
 end
 
+
+local function xor_blake2_salt(salt, letter, H_lo, H_hi)
+   -- salt: concatenation of "Salt"+"Personalization" fields
+   local max_size = letter == "s" and 16 or 32
+   local salt_size = #salt
+   if salt_size > max_size then
+      error(string_format("For BLAKE2%s/BLAKE2%sp/BLAKE2X%s the 'salt' parameter length must not exceed %d bytes", letter, letter, letter, max_size), 2)
+   end
+   if H_lo then
+      local offset, blake2_word_size, xor = 0, letter == "s" and 4 or 8, letter == "s" and XOR or XORA5
+      for j = 5, 4 + ceil(salt_size / blake2_word_size) do
+         local prev, last
+         for _ = 1, blake2_word_size, 4 do
+            offset = offset + 4
+            local a, b, c, d = byte(salt, offset - 3, offset)
+            local four_bytes = (((d or 0) * 256 + (c or 0)) * 256 + (b or 0)) * 256 + (a or 0)
+            prev, last = last, four_bytes
+         end
+         H_lo[j] = xor(H_lo[j], prev and last * hi_factor + prev or last)
+         if H_hi then
+            H_hi[j] = xor(H_hi[j], last)
+         end
+      end
+   end
+end
+
+local function blake2s(message, key, salt, digest_size_in_bytes, XOF_length, B2_offset)
+   -- message:  binary string to be hashed (or nil for "chunk-by-chunk" input mode)
+   -- key:      (optional) binary string up to 32 bytes, by default empty string
+   -- salt:     (optional) binary string up to 16 bytes, by default empty string
+   -- digest_size_in_bytes: (optional) integer from 1 to 32, by default 32
+   -- The last two parameters "XOF_length" and "B2_offset" are for internal use only, user must omit them (or pass nil)
+   digest_size_in_bytes = digest_size_in_bytes or 32
+   if digest_size_in_bytes < 1 or digest_size_in_bytes > 32 then
+      error("BLAKE2s digest length must be from 1 to 32 bytes", 2)
+   end
+   key = key or ""
+   local key_length = #key
+   if key_length > 32 then
+      error("BLAKE2s key length must not exceed 32 bytes", 2)
+   end
+   salt = salt or ""
+   local bytes_compressed, tail, H = 0.0, "", {unpack(sha2_H_hi)}
+   if B2_offset then
+      H[1] = XOR(H[1], digest_size_in_bytes)
+      H[2] = XOR(H[2], 0x20)
+      H[3] = XOR(H[3], B2_offset)
+      H[4] = XOR(H[4], 0x20000000 + XOF_length)
+   else
+      H[1] = XOR(H[1], 0x01010000 + key_length * 256 + digest_size_in_bytes)
+      if XOF_length then
+         H[4] = XOR(H[4], XOF_length)
+      end
+   end
+   if salt ~= "" then
+      xor_blake2_salt(salt, "s", H)
+   end
+
+   local function partial(message_part)
+      if message_part then
+         if tail then
+            local offs = 0
+            if tail ~= "" and #tail + #message_part > 64 then
+               offs = 64 - #tail
+               bytes_compressed = blake2s_feed_64(H, tail..sub(message_part, 1, offs), 0, 64, bytes_compressed)
+               tail = ""
+            end
+            local size = #message_part - offs
+            local size_tail = size > 0 and (size - 1) % 64 + 1 or 0
+            bytes_compressed = blake2s_feed_64(H, message_part, offs, size - size_tail, bytes_compressed)
+            tail = tail..sub(message_part, #message_part + 1 - size_tail)
+            return partial
+         else
+            error("Adding more chunks is not allowed after receiving the result", 2)
+         end
+      else
+         if tail then
+            if B2_offset then
+               blake2s_feed_64(H, nil, 0, 64, 0, 32)
+            else
+               blake2s_feed_64(H, tail..string_rep("\0", 64 - #tail), 0, 64, bytes_compressed, #tail)
+            end
+            tail = nil
+            if not XOF_length or B2_offset then
+               local max_reg = ceil(digest_size_in_bytes / 4)
+               for j = 1, max_reg do
+                  H[j] = HEX(H[j])
+               end
+               H = sub(gsub(table_concat(H, "", 1, max_reg), "(..)(..)(..)(..)", "%4%3%2%1"), 1, digest_size_in_bytes * 2)
+            end
+         end
+         return H
+      end
+   end
+
+   if key_length > 0 then
+      partial(key..string_rep("\0", 64 - key_length))
+   end
+   if B2_offset then
+      return partial()
+   elseif message then
+      -- Actually perform calculations and return the BLAKE2s digest of a message
+      return partial(message)()
+   else
+      -- Return function for chunk-by-chunk loading
+      -- User should feed every chunk of input data as single argument to this function and finally get BLAKE2s digest by invoking this function without an argument
+      return partial
+   end
+end
+
+local function blake2b(message, key, salt, digest_size_in_bytes, XOF_length, B2_offset)
+   -- message:  binary string to be hashed (or nil for "chunk-by-chunk" input mode)
+   -- key:      (optional) binary string up to 64 bytes, by default empty string
+   -- salt:     (optional) binary string up to 32 bytes, by default empty string
+   -- digest_size_in_bytes: (optional) integer from 1 to 64, by default 64
+   -- The last two parameters "XOF_length" and "B2_offset" are for internal use only, user must omit them (or pass nil)
+   digest_size_in_bytes = floor(digest_size_in_bytes or 64)
+   if digest_size_in_bytes < 1 or digest_size_in_bytes > 64 then
+      error("BLAKE2b digest length must be from 1 to 64 bytes", 2)
+   end
+   key = key or ""
+   local key_length = #key
+   if key_length > 64 then
+      error("BLAKE2b key length must not exceed 64 bytes", 2)
+   end
+   salt = salt or ""
+   local bytes_compressed, tail, H_lo, H_hi = 0.0, "", {unpack(sha2_H_lo)}, not HEX64 and {unpack(sha2_H_hi)}
+   if B2_offset then
+      if H_hi then
+         H_lo[1] = XORA5(H_lo[1], digest_size_in_bytes)
+         H_hi[1] = XORA5(H_hi[1], 0x40)
+         H_lo[2] = XORA5(H_lo[2], B2_offset)
+         H_hi[2] = XORA5(H_hi[2], XOF_length)
+      else
+         H_lo[1] = XORA5(H_lo[1], 0x40 * hi_factor + digest_size_in_bytes)
+         H_lo[2] = XORA5(H_lo[2], XOF_length * hi_factor + B2_offset)
+      end
+      H_lo[3] = XORA5(H_lo[3], 0x4000)
+   else
+      H_lo[1] = XORA5(H_lo[1], 0x01010000 + key_length * 256 + digest_size_in_bytes)
+      if XOF_length then
+         if H_hi then
+            H_hi[2] = XORA5(H_hi[2], XOF_length)
+         else
+            H_lo[2] = XORA5(H_lo[2], XOF_length * hi_factor)
+         end
+      end
+   end
+   if salt ~= "" then
+      xor_blake2_salt(salt, "b", H_lo, H_hi)
+   end
+
+   local function partial(message_part)
+      if message_part then
+         if tail then
+            local offs = 0
+            if tail ~= "" and #tail + #message_part > 128 then
+               offs = 128 - #tail
+               bytes_compressed = blake2b_feed_128(H_lo, H_hi, tail..sub(message_part, 1, offs), 0, 128, bytes_compressed)
+               tail = ""
+            end
+            local size = #message_part - offs
+            local size_tail = size > 0 and (size - 1) % 128 + 1 or 0
+            bytes_compressed = blake2b_feed_128(H_lo, H_hi, message_part, offs, size - size_tail, bytes_compressed)
+            tail = tail..sub(message_part, #message_part + 1 - size_tail)
+            return partial
+         else
+            error("Adding more chunks is not allowed after receiving the result", 2)
+         end
+      else
+         if tail then
+            if B2_offset then
+               blake2b_feed_128(H_lo, H_hi, nil, 0, 128, 0, 64)
+            else
+               blake2b_feed_128(H_lo, H_hi, tail..string_rep("\0", 128 - #tail), 0, 128, bytes_compressed, #tail)
+            end
+            tail = nil
+            if XOF_length and not B2_offset then
+               if H_hi then
+                  for j = 8, 1, -1 do
+                     H_lo[j*2] = H_hi[j]
+                     H_lo[j*2-1] = H_lo[j]
+                  end
+                  return H_lo, 16
+               end
+            else
+               local max_reg = ceil(digest_size_in_bytes / 8)
+               if H_hi then
+                  for j = 1, max_reg do
+                     H_lo[j] = HEX(H_hi[j])..HEX(H_lo[j])
+                  end
+               else
+                  for j = 1, max_reg do
+                     H_lo[j] = HEX64(H_lo[j])
+                  end
+               end
+               H_lo = sub(gsub(table_concat(H_lo, "", 1, max_reg), "(..)(..)(..)(..)(..)(..)(..)(..)", "%8%7%6%5%4%3%2%1"), 1, digest_size_in_bytes * 2)
+            end
+            H_hi = nil
+         end
+         return H_lo
+      end
+   end
+
+   if key_length > 0 then
+      partial(key..string_rep("\0", 128 - key_length))
+   end
+   if B2_offset then
+      return partial()
+   elseif message then
+      -- Actually perform calculations and return the BLAKE2b digest of a message
+      return partial(message)()
+   else
+      -- Return function for chunk-by-chunk loading
+      -- User should feed every chunk of input data as single argument to this function and finally get BLAKE2b digest by invoking this function without an argument
+      return partial
+   end
+end
+
+local function blake2sp(message, key, salt, digest_size_in_bytes)
+   -- message:  binary string to be hashed (or nil for "chunk-by-chunk" input mode)
+   -- key:      (optional) binary string up to 32 bytes, by default empty string
+   -- salt:     (optional) binary string up to 16 bytes, by default empty string
+   -- digest_size_in_bytes: (optional) integer from 1 to 32, by default 32
+   digest_size_in_bytes = digest_size_in_bytes or 32
+   if digest_size_in_bytes < 1 or digest_size_in_bytes > 32 then
+      error("BLAKE2sp digest length must be from 1 to 32 bytes", 2)
+   end
+   key = key or ""
+   local key_length = #key
+   if key_length > 32 then
+      error("BLAKE2sp key length must not exceed 32 bytes", 2)
+   end
+   salt = salt or ""
+   local instances, length, first_dword_of_parameter_block, result = {}, 0.0, 0x02080000 + key_length * 256 + digest_size_in_bytes
+   for j = 1, 8 do
+      local bytes_compressed, tail, H = 0.0, "", {unpack(sha2_H_hi)}
+      instances[j] = {bytes_compressed, tail, H}
+      H[1] = XOR(H[1], first_dword_of_parameter_block)
+      H[3] = XOR(H[3], j-1)
+      H[4] = XOR(H[4], 0x20000000)
+      if salt ~= "" then
+         xor_blake2_salt(salt, "s", H)
+      end
+   end
+
+   local function partial(message_part)
+      if message_part then
+         if instances then
+            local from = 0
+            while true do
+               local to = math_min(from + 64 - length % 64, #message_part)
+               if to > from then
+                  local inst = instances[floor(length / 64) % 8 + 1]
+                  local part = sub(message_part, from + 1, to)
+                  length, from = length + to - from, to
+                  local bytes_compressed, tail = inst[1], inst[2]
+                  if #tail < 64 then
+                     tail = tail..part
+                  else
+                     local H = inst[3]
+                     bytes_compressed = blake2s_feed_64(H, tail, 0, 64, bytes_compressed)
+                     tail = part
+                  end
+                  inst[1], inst[2] = bytes_compressed, tail
+               else
+                  break
+               end
+            end
+            return partial
+         else
+            error("Adding more chunks is not allowed after receiving the result", 2)
+         end
+      else
+         if instances then
+            local root_H = {unpack(sha2_H_hi)}
+            root_H[1] = XOR(root_H[1], first_dword_of_parameter_block)
+            root_H[4] = XOR(root_H[4], 0x20010000)
+            if salt ~= "" then
+               xor_blake2_salt(salt, "s", root_H)
+            end
+            for j = 1, 8 do
+               local inst = instances[j]
+               local bytes_compressed, tail, H = inst[1], inst[2], inst[3]
+               blake2s_feed_64(H, tail..string_rep("\0", 64 - #tail), 0, 64, bytes_compressed, #tail, j == 8)
+               if j % 2 == 0 then
+                  local index = 0
+                  for k = j - 1, j do
+                     local inst = instances[k]
+                     local H = inst[3]
+                     for i = 1, 8 do
+                        index = index + 1
+                        common_W_blake2s[index] = H[i]
+                     end
+                  end
+                  blake2s_feed_64(root_H, nil, 0, 64, 64 * (j/2 - 1), j == 8 and 64, j == 8)
+               end
+            end
+            instances = nil
+            local max_reg = ceil(digest_size_in_bytes / 4)
+            for j = 1, max_reg do
+               root_H[j] = HEX(root_H[j])
+            end
+            result = sub(gsub(table_concat(root_H, "", 1, max_reg), "(..)(..)(..)(..)", "%4%3%2%1"), 1, digest_size_in_bytes * 2)
+         end
+         return result
+      end
+   end
+
+   if key_length > 0 then
+      key = key..string_rep("\0", 64 - key_length)
+      for j = 1, 8 do
+         partial(key)
+      end
+   end
+   if message then
+      -- Actually perform calculations and return the BLAKE2sp digest of a message
+      return partial(message)()
+   else
+      -- Return function for chunk-by-chunk loading
+      -- User should feed every chunk of input data as single argument to this function and finally get BLAKE2sp digest by invoking this function without an argument
+      return partial
+   end
+
+end
+
+local function blake2bp(message, key, salt, digest_size_in_bytes)
+   -- message:  binary string to be hashed (or nil for "chunk-by-chunk" input mode)
+   -- key:      (optional) binary string up to 64 bytes, by default empty string
+   -- salt:     (optional) binary string up to 32 bytes, by default empty string
+   -- digest_size_in_bytes: (optional) integer from 1 to 64, by default 64
+   digest_size_in_bytes = digest_size_in_bytes or 64
+   if digest_size_in_bytes < 1 or digest_size_in_bytes > 64 then
+      error("BLAKE2bp digest length must be from 1 to 64 bytes", 2)
+   end
+   key = key or ""
+   local key_length = #key
+   if key_length > 64 then
+      error("BLAKE2bp key length must not exceed 64 bytes", 2)
+   end
+   salt = salt or ""
+   local instances, length, first_dword_of_parameter_block, result = {}, 0.0, 0x02040000 + key_length * 256 + digest_size_in_bytes
+   for j = 1, 4 do
+      local bytes_compressed, tail, H_lo, H_hi = 0.0, "", {unpack(sha2_H_lo)}, not HEX64 and {unpack(sha2_H_hi)}
+      instances[j] = {bytes_compressed, tail, H_lo, H_hi}
+      H_lo[1] = XORA5(H_lo[1], first_dword_of_parameter_block)
+      H_lo[2] = XORA5(H_lo[2], j-1)
+      H_lo[3] = XORA5(H_lo[3], 0x4000)
+      if salt ~= "" then
+         xor_blake2_salt(salt, "b", H_lo, H_hi)
+      end
+   end
+
+   local function partial(message_part)
+      if message_part then
+         if instances then
+            local from = 0
+            while true do
+               local to = math_min(from + 128 - length % 128, #message_part)
+               if to > from then
+                  local inst = instances[floor(length / 128) % 4 + 1]
+                  local part = sub(message_part, from + 1, to)
+                  length, from = length + to - from, to
+                  local bytes_compressed, tail = inst[1], inst[2]
+                  if #tail < 128 then
+                     tail = tail..part
+                  else
+                     local H_lo, H_hi = inst[3], inst[4]
+                     bytes_compressed = blake2b_feed_128(H_lo, H_hi, tail, 0, 128, bytes_compressed)
+                     tail = part
+                  end
+                  inst[1], inst[2] = bytes_compressed, tail
+               else
+                  break
+               end
+            end
+            return partial
+         else
+            error("Adding more chunks is not allowed after receiving the result", 2)
+         end
+      else
+         if instances then
+            local root_H_lo, root_H_hi = {unpack(sha2_H_lo)}, not HEX64 and {unpack(sha2_H_hi)}
+            root_H_lo[1] = XORA5(root_H_lo[1], first_dword_of_parameter_block)
+            root_H_lo[3] = XORA5(root_H_lo[3], 0x4001)
+            if salt ~= "" then
+               xor_blake2_salt(salt, "b", root_H_lo, root_H_hi)
+            end
+            for j = 1, 4 do
+               local inst = instances[j]
+               local bytes_compressed, tail, H_lo, H_hi = inst[1], inst[2], inst[3], inst[4]
+               blake2b_feed_128(H_lo, H_hi, tail..string_rep("\0", 128 - #tail), 0, 128, bytes_compressed, #tail, j == 4)
+               if j % 2 == 0 then
+                  local index = 0
+                  for k = j - 1, j do
+                     local inst = instances[k]
+                     local H_lo, H_hi = inst[3], inst[4]
+                     for i = 1, 8 do
+                        index = index + 1
+                        common_W_blake2b[index] = H_lo[i]
+                        if H_hi then
+                           index = index + 1
+                           common_W_blake2b[index] = H_hi[i]
+                        end
+                     end
+                  end
+                  blake2b_feed_128(root_H_lo, root_H_hi, nil, 0, 128, 128 * (j/2 - 1), j == 4 and 128, j == 4)
+               end
+            end
+            instances = nil
+            local max_reg = ceil(digest_size_in_bytes / 8)
+            if HEX64 then
+               for j = 1, max_reg do
+                  root_H_lo[j] = HEX64(root_H_lo[j])
+               end
+            else
+               for j = 1, max_reg do
+                  root_H_lo[j] = HEX(root_H_hi[j])..HEX(root_H_lo[j])
+               end
+            end
+            result = sub(gsub(table_concat(root_H_lo, "", 1, max_reg), "(..)(..)(..)(..)(..)(..)(..)(..)", "%8%7%6%5%4%3%2%1"), 1, digest_size_in_bytes * 2)
+         end
+         return result
+      end
+   end
+
+   if key_length > 0 then
+      key = key..string_rep("\0", 128 - key_length)
+      for j = 1, 4 do
+         partial(key)
+      end
+   end
+   if message then
+      -- Actually perform calculations and return the BLAKE2bp digest of a message
+      return partial(message)()
+   else
+      -- Return function for chunk-by-chunk loading
+      -- User should feed every chunk of input data as single argument to this function and finally get BLAKE2bp digest by invoking this function without an argument
+      return partial
+   end
+
+end
+
+local function blake2x(inner_func, inner_func_letter, common_W_blake2, block_size, digest_size_in_bytes, message, key, salt)
+   local XOF_digest_length_limit, XOF_digest_length, chunk_by_chunk_output = 2^(block_size / 2) - 1
+   if digest_size_in_bytes == -1 then  -- infinite digest
+      digest_size_in_bytes = math_huge
+      XOF_digest_length = floor(XOF_digest_length_limit)
+      chunk_by_chunk_output = true
+   else
+      if digest_size_in_bytes < 0 then
+         digest_size_in_bytes = -1.0 * digest_size_in_bytes
+         chunk_by_chunk_output = true
+      end
+      XOF_digest_length = floor(digest_size_in_bytes)
+      if XOF_digest_length >= XOF_digest_length_limit then
+         error("Requested digest is too long.  BLAKE2X"..inner_func_letter.." finite digest is limited by (2^"..floor(block_size / 2)..")-2 bytes.  Hint: you can generate infinite digest.", 2)
+      end
+   end
+   salt = salt or ""
+   if salt ~= "" then
+      xor_blake2_salt(salt, inner_func_letter)  -- don't xor, only check the size of salt
+   end
+   local inner_partial = inner_func(nil, key, salt, nil, XOF_digest_length)
+   local result
+
+   local function partial(message_part)
+      if message_part then
+         if inner_partial then
+            inner_partial(message_part)
+            return partial
+         else
+            error("Adding more chunks is not allowed after receiving the result", 2)
+         end
+      else
+         if inner_partial then
+            local half_W, half_W_size = inner_partial()
+            half_W_size, inner_partial = half_W_size or 8
+
+            local function get_hash_block(block_no)
+               -- block_no = 0...(2^32-1)
+               local size = math_min(block_size, digest_size_in_bytes - block_no * block_size)
+               if size <= 0 then
+                  return ""
+               end
+               for j = 1, half_W_size do
+                  common_W_blake2[j] = half_W[j]
+               end
+               for j = half_W_size + 1, 2 * half_W_size do
+                  common_W_blake2[j] = 0
+               end
+               return inner_func(nil, nil, salt, size, XOF_digest_length, floor(block_no))
+            end
+
+            local hash = {}
+            if chunk_by_chunk_output then
+               local pos, period, cached_block_no, cached_block = 0, block_size * 2^32
+
+               local function get_next_part_of_digest(arg1, arg2)
+                  if arg1 == "seek" then
+                     -- Usage #1:  get_next_part_of_digest("seek", new_pos)
+                     pos = arg2 % period
+                  else
+                     -- Usage #2:  hex_string = get_next_part_of_digest(size)
+                     local size, index = arg1 or 1, 0
+                     while size > 0 do
+                        local block_offset = pos % block_size
+                        local block_no = (pos - block_offset) / block_size
+                        local part_size = math_min(size, block_size - block_offset)
+                        if cached_block_no ~= block_no then
+                           cached_block_no = block_no
+                           cached_block = get_hash_block(block_no)
+                        end
+                        index = index + 1
+                        hash[index] = sub(cached_block, block_offset * 2 + 1, (block_offset + part_size) * 2)
+                        size = size - part_size
+                        pos = (pos + part_size) % period
+                     end
+                     return table_concat(hash, "", 1, index)
+                  end
+               end
+
+               result = get_next_part_of_digest
+            else
+               for j = 1.0, ceil(digest_size_in_bytes / block_size) do
+                  hash[j] = get_hash_block(j - 1.0)
+               end
+               result = table_concat(hash)
+            end
+         end
+         return result
+      end
+   end
+
+   if message then
+      -- Actually perform calculations and return the BLAKE2X digest of a message
+      return partial(message)()
+   else
+      -- Return function for chunk-by-chunk loading
+      -- User should feed every chunk of input data as single argument to this function and finally get BLAKE2X digest by invoking this function without an argument
+      return partial
+   end
+end
+
+local function blake2xs(digest_size_in_bytes, message, key, salt)
+   -- digest_size_in_bytes:
+   --    0..65534       = get finite digest as single Lua string
+   --    (-1)           = get infinite digest in "chunk-by-chunk" output mode
+   --    (-2)..(-65534) = get finite digest in "chunk-by-chunk" output mode
+   -- message:  binary string to be hashed (or nil for "chunk-by-chunk" input mode)
+   -- key:      (optional) binary string up to 32 bytes, by default empty string
+   -- salt:     (optional) binary string up to 16 bytes, by default empty string
+   return blake2x(blake2s, "s", common_W_blake2s, 32, digest_size_in_bytes, message, key, salt)
+end
+
+local function blake2xb(digest_size_in_bytes, message, key, salt)
+   -- digest_size_in_bytes:
+   --    0..4294967294       = get finite digest as single Lua string
+   --    (-1)                = get infinite digest in "chunk-by-chunk" output mode
+   --    (-2)..(-4294967294) = get finite digest in "chunk-by-chunk" output mode
+   -- message:  binary string to be hashed (or nil for "chunk-by-chunk" input mode)
+   -- key:      (optional) binary string up to 64 bytes, by default empty string
+   -- salt:     (optional) binary string up to 32 bytes, by default empty string
+   return blake2x(blake2b, "b", common_W_blake2b, 64, digest_size_in_bytes, message, key, salt)
+end
+
+
+local function blake3(message, key, digest_size_in_bytes, message_flags, K, return_array)
+   -- message:  binary string to be hashed (or nil for "chunk-by-chunk" input mode)
+   -- key:      (optional) binary string up to 32 bytes, by default empty string
+   -- digest_size_in_bytes: (optional) by default 32
+   --    0,1,2,3,4,...  = get finite digest as single Lua string
+   --    (-1)           = get infinite digest in "chunk-by-chunk" output mode
+   --    -2,-3,-4,...   = get finite digest in "chunk-by-chunk" output mode
+   -- The last three parameters "message_flags", "K" and "return_array" are for internal use only, user must omit them (or pass nil)
+   key = key or ""
+   digest_size_in_bytes = digest_size_in_bytes or 32
+   message_flags = message_flags or 0
+   if key == "" then
+      K = K or sha2_H_hi
+   else
+      local key_length = #key
+      if key_length > 32 then
+         error("BLAKE3 key length must not exceed 32 bytes", 2)
+      end
+      key = key..string_rep("\0", 32 - key_length)
+      K = {}
+      for j = 1, 8 do
+         local a, b, c, d = byte(key, 4*j-3, 4*j)
+         K[j] = ((d * 256 + c) * 256 + b) * 256 + a
+      end
+      message_flags = message_flags + 16  -- flag:KEYED_HASH
+   end
+   local tail, H, chunk_index, blocks_in_chunk, stack_size, stack = "", {}, 0, 0, 0, {}
+   local final_H_in, final_block_length, chunk_by_chunk_output, result, wide_output = K
+   local final_compression_flags = 3      -- flags:CHUNK_START,CHUNK_END
+
+   local function feed_blocks(str, offs, size)
+      -- size >= 0, size is multiple of 64
+      while size > 0 do
+         local part_size_in_blocks, block_flags, H_in = 1, 0, H
+         if blocks_in_chunk == 0 then
+            block_flags = 1               -- flag:CHUNK_START
+            H_in, final_H_in = K, H
+            final_compression_flags = 2   -- flag:CHUNK_END
+         elseif blocks_in_chunk == 15 then
+            block_flags = 2               -- flag:CHUNK_END
+            final_compression_flags = 3   -- flags:CHUNK_START,CHUNK_END
+            final_H_in = K
+         else
+            part_size_in_blocks = math_min(size / 64, 15 - blocks_in_chunk)
+         end
+         local part_size = part_size_in_blocks * 64
+         blake3_feed_64(str, offs, part_size, message_flags + block_flags, chunk_index, H_in, H)
+         offs, size = offs + part_size, size - part_size
+         blocks_in_chunk = (blocks_in_chunk + part_size_in_blocks) % 16
+         if blocks_in_chunk == 0 then
+            -- completing the currect chunk
+            chunk_index = chunk_index + 1.0
+            local divider = 2.0
+            while chunk_index % divider == 0 do
+               divider = divider * 2.0
+               stack_size = stack_size - 8
+               for j = 1, 8 do
+                  common_W_blake2s[j] = stack[stack_size + j]
+               end
+               for j = 1, 8 do
+                  common_W_blake2s[j + 8] = H[j]
+               end
+               blake3_feed_64(nil, 0, 64, message_flags + 4, 0, K, H)  -- flag:PARENT
+            end
+            for j = 1, 8 do
+               stack[stack_size + j] = H[j]
+            end
+            stack_size = stack_size + 8
+         end
+      end
+   end
+
+   local function get_hash_block(block_no)
+      local size = math_min(64, digest_size_in_bytes - block_no * 64)
+      if block_no < 0 or size <= 0 then
+         return ""
+      end
+      if chunk_by_chunk_output then
+         for j = 1, 16 do
+            common_W_blake2s[j] = stack[j + 16]
+         end
+      end
+      blake3_feed_64(nil, 0, 64, final_compression_flags, block_no, final_H_in, stack, wide_output, final_block_length)
+      if return_array then
+         return stack
+      end
+      local max_reg = ceil(size / 4)
+      for j = 1, max_reg do
+         stack[j] = HEX(stack[j])
+      end
+      return sub(gsub(table_concat(stack, "", 1, max_reg), "(..)(..)(..)(..)", "%4%3%2%1"), 1, size * 2)
+   end
+
+   local function partial(message_part)
+      if message_part then
+         if tail then
+            local offs = 0
+            if tail ~= "" and #tail + #message_part > 64 then
+               offs = 64 - #tail
+               feed_blocks(tail..sub(message_part, 1, offs), 0, 64)
+               tail = ""
+            end
+            local size = #message_part - offs
+            local size_tail = size > 0 and (size - 1) % 64 + 1 or 0
+            feed_blocks(message_part, offs, size - size_tail)
+            tail = tail..sub(message_part, #message_part + 1 - size_tail)
+            return partial
+         else
+            error("Adding more chunks is not allowed after receiving the result", 2)
+         end
+      else
+         if tail then
+            final_block_length = #tail
+            tail = tail..string_rep("\0", 64 - #tail)
+            if common_W_blake2s[0] then
+               for j = 1, 16 do
+                  local a, b, c, d = byte(tail, 4*j-3, 4*j)
+                  common_W_blake2s[j] = OR(SHL(d, 24), SHL(c, 16), SHL(b, 8), a)
+               end
+            else
+               for j = 1, 16 do
+                  local a, b, c, d = byte(tail, 4*j-3, 4*j)
+                  common_W_blake2s[j] = ((d * 256 + c) * 256 + b) * 256 + a
+               end
+            end
+            tail = nil
+            for stack_size = stack_size - 8, 0, -8 do
+               blake3_feed_64(nil, 0, 64, message_flags + final_compression_flags, chunk_index, final_H_in, H, nil, final_block_length)
+               chunk_index, final_block_length, final_H_in, final_compression_flags = 0, 64, K, 4  -- flag:PARENT
+               for j = 1, 8 do
+                  common_W_blake2s[j] = stack[stack_size + j]
+               end
+               for j = 1, 8 do
+                  common_W_blake2s[j + 8] = H[j]
+               end
+            end
+            final_compression_flags = message_flags + final_compression_flags + 8  -- flag:ROOT
+            if digest_size_in_bytes < 0 then
+               if digest_size_in_bytes == -1 then  -- infinite digest
+                  digest_size_in_bytes = math_huge
+               else
+                  digest_size_in_bytes = -1.0 * digest_size_in_bytes
+               end
+               chunk_by_chunk_output = true
+               for j = 1, 16 do
+                  stack[j + 16] = common_W_blake2s[j]
+               end
+            end
+            digest_size_in_bytes = math_min(2^53, digest_size_in_bytes)
+            wide_output = digest_size_in_bytes > 32
+            if chunk_by_chunk_output then
+               local pos, cached_block_no, cached_block = 0.0
+
+               local function get_next_part_of_digest(arg1, arg2)
+                  if arg1 == "seek" then
+                     -- Usage #1:  get_next_part_of_digest("seek", new_pos)
+                     pos = arg2 * 1.0
+                  else
+                     -- Usage #2:  hex_string = get_next_part_of_digest(size)
+                     local size, index = arg1 or 1, 32
+                     while size > 0 do
+                        local block_offset = pos % 64
+                        local block_no = (pos - block_offset) / 64
+                        local part_size = math_min(size, 64 - block_offset)
+                        if cached_block_no ~= block_no then
+                           cached_block_no = block_no
+                           cached_block = get_hash_block(block_no)
+                        end
+                        index = index + 1
+                        stack[index] = sub(cached_block, block_offset * 2 + 1, (block_offset + part_size) * 2)
+                        size = size - part_size
+                        pos = pos + part_size
+                     end
+                     return table_concat(stack, "", 33, index)
+                  end
+               end
+
+               result = get_next_part_of_digest
+            elseif digest_size_in_bytes <= 64 then
+               result = get_hash_block(0)
+            else
+               local last_block_no = ceil(digest_size_in_bytes / 64) - 1
+               for block_no = 0.0, last_block_no do
+                  stack[33 + block_no] = get_hash_block(block_no)
+               end
+               result = table_concat(stack, "", 33, 33 + last_block_no)
+            end
+         end
+         return result
+      end
+   end
+
+   if message then
+      -- Actually perform calculations and return the BLAKE3 digest of a message
+      return partial(message)()
+   else
+      -- Return function for chunk-by-chunk loading
+      -- User should feed every chunk of input data as single argument to this function and finally get BLAKE3 digest by invoking this function without an argument
+      return partial
+   end
+end
+
+local function blake3_derive_key(key_material, context_string, derived_key_size_in_bytes)
+   -- key_material: (string) your source of entropy to derive a key from (for example, it can be a master password)
+   --               set to nil for feeding the key material in "chunk-by-chunk" input mode
+   -- context_string: (string) unique description of the derived key
+   -- digest_size_in_bytes: (optional) by default 32
+   --    0,1,2,3,4,...  = get finite derived key as single Lua string
+   --    (-1)           = get infinite derived key in "chunk-by-chunk" output mode
+   --    -2,-3,-4,...   = get finite derived key in "chunk-by-chunk" output mode
+   if type(context_string) ~= "string" then
+      error("'context_string' parameter must be a Lua string", 2)
+   end
+   local K = blake3(context_string, nil, nil, 32, nil, true)           -- flag:DERIVE_KEY_CONTEXT
+   return blake3(key_material, nil, derived_key_size_in_bytes, 64, K)  -- flag:DERIVE_KEY_MATERIAL
+end
+
+
+
 local sha = {
    md5        = md5,                                                                                                                   -- MD5
    sha1       = sha1,                                                                                                                  -- SHA-1
@@ -4646,7 +5633,27 @@ local sha = {
    bin2hex       = bin_to_hex,
    base642bin    = base64_to_bin,
    bin2base64    = bin_to_base64,
-   }
+   -- BLAKE2 hash functions:
+   blake2b  = blake2b,   -- BLAKE2b (message, key, salt, digest_size_in_bytes)
+   blake2s  = blake2s,   -- BLAKE2s (message, key, salt, digest_size_in_bytes)
+   blake2bp = blake2bp,  -- BLAKE2bp(message, key, salt, digest_size_in_bytes)
+   blake2sp = blake2sp,  -- BLAKE2sp(message, key, salt, digest_size_in_bytes)
+   blake2xb = blake2xb,  -- BLAKE2Xb(digest_size_in_bytes, message, key, salt)
+   blake2xs = blake2xs,  -- BLAKE2Xs(digest_size_in_bytes, message, key, salt)
+   -- BLAKE2 aliases:
+   blake2      = blake2b,
+   blake2b_160 = function (message, key, salt) return blake2b(message, key, salt, 20) end, -- BLAKE2b-160
+   blake2b_256 = function (message, key, salt) return blake2b(message, key, salt, 32) end, -- BLAKE2b-256
+   blake2b_384 = function (message, key, salt) return blake2b(message, key, salt, 48) end, -- BLAKE2b-384
+   blake2b_512 = blake2b,                                                      -- 64       -- BLAKE2b-512
+   blake2s_128 = function (message, key, salt) return blake2s(message, key, salt, 16) end, -- BLAKE2s-128
+   blake2s_160 = function (message, key, salt) return blake2s(message, key, salt, 20) end, -- BLAKE2s-160
+   blake2s_224 = function (message, key, salt) return blake2s(message, key, salt, 28) end, -- BLAKE2s-224
+   blake2s_256 = blake2s,                                                      -- 32       -- BLAKE2s-256
+   -- BLAKE3 hash function
+   blake3            = blake3,             -- BLAKE3    (message, key, digest_size_in_bytes)
+   blake3_derive_key = blake3_derive_key,  -- BLAKE3_KDF(key_material, context_string, derived_key_size_in_bytes)
+}
 
 
 block_size_for_HMAC = {
