@@ -18,14 +18,20 @@ return function(lock_screen)
 
     local adjustments = {
         passFrame = {w=0,h=0,x=0,y=0},
+        passLabel = {x=0,y=0},
         passInput = {x=0,y=0},
-        pass_submit = {x=0,y=0}
+        pass_submit = {x=0,y=0},
+        exit_button = {x=0}
+
     }
 
     if device_info.device_type == "mobile" then
         adjustments.passFrame.w = 5
+        adjustments.passFrame.x = 1
+        adjustments.passLabel.x = 1
         adjustments.passInput.x = 1
         adjustments.pass_submit.x = 1
+        adjustments.exit_button.x = 1
     end
     
     local topBar_ls = lock_screen:addFrame():setPosition(1,1):setSize("parent.w", 1):setBackground(colors.gray):setForeground(colors.white)
@@ -35,13 +41,13 @@ return function(lock_screen)
     local desktop_ls = lock_screen:addFrame():setPosition(1, 2):setSize("parent.w", "parent.h-2"):setBackground(colors.black)
 
     local passFrame = desktop_ls:addFrame():setSize("parent.w/3 + "..adjustments.passFrame.w, "parent.h/3 + 2 + "..adjustments.passFrame.h):setPosition("parent.w/2-self.w/2 + "..adjustments.passFrame.x, "parent.h/2-self.h/2 + "..adjustments.passFrame.y):setBackground(colors.gray)
-    local passLabel = passFrame:addLabel():setText(" Password:"):setPosition("parent.w/2-self.w/2", "parent.h/2-self.h/2"):setForeground(colors.white)
+    local passLabel = passFrame:addLabel():setText(" Password:"):setPosition("parent.w/2-self.w/2 + "..adjustments.passLabel.x, "parent.h/2-self.h/2 + "..adjustments.passLabel.y):setForeground(colors.white)
     local passInput = passFrame:addInput():setInputType("password"):setInputLimit(12):setPosition("parent.w/2-self.w/2 + "..adjustments.passInput.x, "parent.h/2-self.h/2+1 + "..adjustments.passInput.y):setForeground(colors.white)
     local pass_submit = passFrame:addButton():setText("Submit"):setPosition("parent.w/2-self.w/2 + "..adjustments.pass_submit.x, "parent.h/2+3 + "..adjustments.pass_submit.y):setSize(8, 1):setBackground(colors.lightGray)
     local passReponse = passFrame:addLabel():setText(""):setPosition("parent.w/2-self.w/2", "parent.h/2+2"):setForeground(colors.white)
 
     local bottomBar_ls = lock_screen:addFrame():setPosition(1,"parent.h"):setSize("parent.w", 1):setBackground(colors.gray):setForeground(colors.white)
-    local exit_button_ls = bottomBar_ls:addButton():setText("Exit"):setBackground(colors.lightGray):setSize(6,1):setPosition("parent.w/2-self.w/2",1):onClick(basalt.stop)
+    local exit_button_ls = bottomBar_ls:addButton():setText("Exit"):setBackground(colors.lightGray):setSize(6,1):setPosition("parent.w/2-self.w/2 + "..adjustments.exit_button.x,1):onClick(basalt.stop)
 
     local function enterPass()
         local password = "a"

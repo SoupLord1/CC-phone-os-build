@@ -30,20 +30,6 @@ device_info_file.close()
 
 -- LOCK SCREEN END
 
-local device_info_file = fs.open("os/default_apps/storage/settings/data/device_info.json","r")
-    
-local device_info = JSON:decode(device_info_file.readAll())
-
-device_info_file.close()
-
-local adjustments = {
-    offset = {x=0,y=0}
-}
-
-if device_info.device_type == "mobile" then
-    adjustments.offset.x = 0
-end
-
 local main_os = main:addFrame():setSize("parent.w", "parent.h")
 
 
@@ -68,9 +54,11 @@ app_slots["app_frame"] = {}
 app_slots["slot_handle"] = {}
 app_slots["app_frame_2"] = {}
 app_slots["slot_handle_2"] = {}
+app_slots["app_frame_3"] = {}
+app_slots["slot_handle_3"] = {}
 
 local spacing = {w = 8, h = 6}
-local offset = {w = 4 + adjustments.offset.x, h = 2 + adjustments.offset.y}
+local offset = {w = 4, h = 2}
 
 for i = 1, #apps.appsL1 do
     app_slots["app_frame"][i] = apps.appsL1[i]["app"](desktop):hide()
@@ -91,6 +79,15 @@ for i = 1, #app_slots["app_frame_2"] do
     nameL2 = desktop:addLabel():setText(apps.appsL2[i]["name"]["nameL2"]):setPosition(spacing.w*(i-1) + offset.w - (string.len(apps.appsL2[i]["name"]["nameL2"])-5)/2,4 + offset.h + spacing.h):setForeground(colors.white)}
 end
 
+for i = 1, #apps.appsL3 do
+    app_slots["app_frame_3"][i] = apps.appsL3[i]["app"](desktop):hide()
+end
+for i = 1, #app_slots["app_frame_3"] do
+    app_slots["slot_handle_3"][i] = {icon = desktop:addImage():setPosition(spacing.w*(i-1) + offset.w, offset.h + spacing.h*2):setImage(apps.appsL3[i]["icon"]):onClick(function () app_slots["app_frame_3"][i]:show(); end),
+    nameL1 = desktop:addLabel():setText(apps.appsL3[i]["name"]["nameL1"]):setPosition(spacing.w*(i-1) + offset.w - (string.len(apps.appsL3[i]["name"]["nameL1"])-5)/2,3 + offset.h + spacing.h*2):setForeground(colors.white),
+    nameL2 = desktop:addLabel():setText(apps.appsL3[i]["name"]["nameL2"]):setPosition(spacing.w*(i-1) + offset.w - (string.len(apps.appsL3[i]["name"]["nameL2"])-5)/2,4 + offset.h + spacing.h*2):setForeground(colors.white)}
+end
+
 
 local function home()
     for i = 1, #app_slots["app_frame_2"] do
@@ -99,6 +96,10 @@ local function home()
 
     for i = 1, #app_slots["app_frame"] do
         app_slots["app_frame"][i]:hide()
+    end
+
+    for i = 1, #app_slots["app_frame_3"] do
+        app_slots["app_frame_3"][i]:hide()
     end
 end
 
