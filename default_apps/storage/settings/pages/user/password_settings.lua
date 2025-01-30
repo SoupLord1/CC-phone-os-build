@@ -1,6 +1,6 @@
 return function(password_settings)
 
-    password_settings:addLabel():setText("Password Settings"):setPosition(2, 2):setForeground(colors.white)
+    password_settings:addLabel():setText("Password Config"):setPosition(2, 2):setForeground(colors.white)
     password_settings:addLabel():setText("New Password: "):setPosition(2, 4):setForeground(colors.white)
     local new_password = password_settings:addInput():setInputType("password"):setInputLimit(12):setPosition(15, 4):setForeground(colors.white)
     password_settings:addLabel():setText("Old Password: "):setPosition(2, 5):setForeground(colors.white)
