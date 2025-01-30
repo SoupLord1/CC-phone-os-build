@@ -1,7 +1,7 @@
 local app_loader = {}
 
 local util = require("modules.main_os.util.util")
-local JSON = require("modules.json.JSON")
+local JSON = require("modules.json.json")
 
 local device_info_file = fs.open("os/default_apps/storage/settings/data/device_info.json","r")
     
