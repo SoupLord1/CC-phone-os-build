@@ -9,12 +9,4 @@ function util.tableMerge(table1, table2, result)
 	end
 end
 
-function util.getTableFromString(filepath)
-    local tableFile = fs.open(filepath, "r")
-    print(filepath)
-    local table = loadstring("return"..tableFile:readAll())()
-    tableFile:close()
-    return table
-end
-
 return util

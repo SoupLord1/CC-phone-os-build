@@ -1,6 +1,11 @@
 local app_loader = {}
 
-local util = require("modules.main_os.util.util")
+local function getTableFromString(filepath)
+    local tableFile = fs.open(filepath, "r")
+    local table = loadstring("return"..tableFile:readAll())()
+    tableFile:close()
+    return table
+end
 
 function app_loader.get_default_apps()
     local default_app_files = fs.list("os/default_apps/setup/")
@@ -10,11 +15,11 @@ function app_loader.get_default_apps()
     
     apps.appsL1, apps.appsL2 = {}, {}
     for i = 1, #default_app_files do
-        app_setups[i] = util.getTableFromString("os/default_apps/setup/"..default_app_files[i])
+        app_setups[i] = getTableFromString("os/default_apps/setup/"..default_app_files[i])
     end
 
     for i = 1, #app_files do
-        app_setups[i + #default_app_files] = util.getTableFromString("os/apps/setup/"..app_files[i])
+        app_setups[i + #default_app_files] = getTableFromString("os/apps/setup/"..app_files[i])
     end
 
     for i = 1, #app_setups do
@@ -41,11 +46,11 @@ function app_loader.get_default_apps()
         if i < 7 then
             apps.appsL1[i] = {name = {nameL1 = nameL1, nameL2 = nameL2}, 
             app = require(string.gsub(app_setups[i][1]["app"], ".lua", "")), 
-            icon = util.getTableFromString("os/"..app_setups[i][1]["icon"])}
+            icon = getTableFromString("os/"..app_setups[i][1]["icon"])}
         elseif i < 13 then 
             apps.appsL2[i-6] = {name = {nameL1 = nameL1, nameL2 = nameL2}, 
             app = require(string.gsub(app_setups[i][1]["app"], ".lua", "")), 
-            icon = util.getTableFromString("os/"..app_setups[i][1]["icon"])}
+            icon = getTableFromString("os/"..app_setups[i][1]["icon"])}
         end
     end 
     return apps
