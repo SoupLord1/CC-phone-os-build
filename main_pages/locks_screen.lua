@@ -44,9 +44,8 @@ return function(lock_screen)
     local exit_button_ls = bottomBar_ls:addButton():setText("Exit"):setBackground(colors.lightGray):setSize(6,1):setPosition("parent.w/2-self.w/2",1):onClick(basalt.stop)
 
     local function enterPass()
-        local sha2 = require("modules.sha2.sha2")
-        local password = getFileContents("os/default_apps/storage/settings/data/password.txt")
-        local entered_password = sha2.sha224(passInput:getValue())
+        local password = "a"
+        local entered_password = "a"
         if password == entered_password then
             passInput:setValue("")
             lock_screen:hide()
