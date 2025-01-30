@@ -1,7 +1,7 @@
 return function(lock_screen)
 
     local basalt = require("modules.basalt.basalt")
-    local JSON = require("modules.json.JSON")
+    local JSON = require("modules.json.json")
 
     local function getFileContents(filepath)
         local file = fs.open(filepath, "r")

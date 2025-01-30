@@ -1,6 +1,6 @@
 local basalt = require("modules.basalt.basalt")
 
-local JSON = require("modules.json.JSON")
+local JSON = require("modules.json.json")
 
 local function exitOs()
     basalt.stop()
