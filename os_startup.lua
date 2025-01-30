@@ -1,5 +1,7 @@
 local basalt = require("modules.basalt.basalt")
 
+local JSON = require("modules.json.JSON")
+
 local function exitOs()
     basalt.stop()
 end
@@ -13,12 +15,34 @@ if device_width == 26 then
     device_type = "mobile"
 end
 
-basalt.debug("Device: "..device_type)
+local device_info = {}
+
+device_info.device_type = device_type
+
+local device_info_file = fs.open("os/default_apps/storage/settings/data/device_info.json", "w")
+
+device_info_file.write(JSON:encode(device_info))
+
+device_info_file.close()
 
 -- LOCK SCREEN
 
 
 -- LOCK SCREEN END
+
+local device_info_file = fs.open("os/default_apps/storage/settings/data/device_info.json","r")
+    
+local device_info = JSON:decode(device_info_file.readAll())
+
+device_info_file.close()
+
+local adjustments = {
+    offset = {x=0,y=0}
+}
+
+if device_info.device_type == "mobile" then
+    adjustments.offset.x = 0
+end
 
 local main_os = main:addFrame():setSize("parent.w", "parent.h")
 
@@ -46,7 +70,7 @@ app_slots["app_frame_2"] = {}
 app_slots["slot_handle_2"] = {}
 
 local spacing = {w = 8, h = 6}
-local offset = {w = 4, h = 2}
+local offset = {w = 4 + adjustments.offset.x, h = 2 + adjustments.offset.y}
 
 for i = 1, #apps.appsL1 do
     app_slots["app_frame"][i] = apps.appsL1[i]["app"](desktop):hide()
