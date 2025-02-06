@@ -70,11 +70,14 @@ local current_app = desktop:addFrame():hide()
 local app_fetcher = require("system.modules.custom.app_fetcher")
 
 local function start_app(config)
-    local app = app_fetcher.fetch(config)
-    if app ~= nil then
-        local app_handle = app()(desktop)
-        current_app = app_handle
-    end
+    local thread = main_os:addThread()
+    thread:start(function ()
+        local app = app_fetcher.fetch(config)
+        if app ~= nil then
+            local app_handle = app()(desktop)
+            current_app = app_handle
+        end
+    end)
 end
 
 local function stop_app()
