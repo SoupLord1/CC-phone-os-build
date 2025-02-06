@@ -67,6 +67,7 @@ local function stop_app()
     if current_app ~= nil then
         current_app:remove()
     end
+    basalt.debug(current_app == nil)
 end
 
 local app_loader = require("system.modules.custom.app_loader")
