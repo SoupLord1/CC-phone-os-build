@@ -51,20 +51,21 @@ local exit_button = bottomBar:addButton():setText("Exit"):setBackground(colors.l
 local logout_button = bottomBar:addButton():setText("Logout"):setBackground(colors.lightGray):setSize(8, 1):setPosition("parent.w-self.w+1",1)
 local home_button = bottomBar:addButton():setText("Home"):setBackground(colors.lightGray):setSize(6,1):setPosition("parent.w/2-self.w/2",1)
 
-local current_app = desktop:addFrame()
-
-basalt.debug(home_button == nil)
+local app_frame = desktop:addFrame():setSize("parent.w","parent.h"):hide()
+local current_app = app_frame:addFrame()
 
 local app_fetcher = require("system.modules.custom.app_fetcher")
 
 local function start_app(config)
     local app = app_fetcher.fetch(config)
-    local app_handle = app()(desktop)
-    return app_handle
+    local app_handle = app()(app_frame)
+    current_app = app_handle
+    app_frame:show()
 end
 
-local function stop_app(app)
-    app:remove()
+local function stop_app()
+    app_frame:hide()
+    current_app:remove()
 end
 
 local app_loader = require("system.modules.custom.app_loader")
@@ -179,11 +180,11 @@ rightButton:onClick(nextPage)
 
 
 
-local function home(app)
-    stop_app(app)
+local function home()
+    stop_app()
 end
 
-home_button:onClick(function () home(current_app) end)
+home_button:onClick(home)
 
 -- MAIN OS
 

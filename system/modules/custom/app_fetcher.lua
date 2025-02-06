@@ -13,10 +13,12 @@ function app_fetcher.fetch(config)
         end
     end
 
+    local timeout = 0
     repeat
         rednet.send(config.server, json:encode({task = "fetch_app", app = config.app}))
-        id, data = rednet.receive()
-    until id == config.server
+        id, data = rednet.receive(0.05)
+        timeout = timeout + 1
+    until id == config.server or timeout > 10
 
     return load(data)
 end
