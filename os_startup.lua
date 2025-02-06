@@ -74,8 +74,13 @@ local app_loader = require("system.modules.custom.app_loader")
 
 local system_apps = app_loader.get_system_apps()
 
+local apps_per_page = 12
+if device_type == "mobile" then
+    apps_per_page = 6
+end
+
 local current_page = 1
-local total_desktop_pages = math.ceil(#system_apps / 9)
+local total_desktop_pages = math.ceil(#system_apps / apps_per_page)
 
 local desktop_pages = {}
 
@@ -83,13 +88,21 @@ for i = 1, total_desktop_pages, 1 do
     table.insert(desktop_pages, desktop:addFrame():setPosition(2,1):setSize("parent.w - 2", "parent.h"):setBackground(colors.black):hide())
 end
 
+local rows = 2
 
+local apps_per_row = 6
+local app_spacing = 8
+
+if device_type == "mobile" then
+    app_spacing = 8
+    apps_per_row = 3
+end
 
 local desktop_page_counter = 1
 local row_counter = 1
 local row_index = 1
 for index, _ in ipairs(system_apps) do
-    desktop_pages[desktop_page_counter]:addImage():loadImage(system_apps[index].icon_path):setPosition(3+(row_index-1)*8, 2 + (row_counter-1)*6):onClick(function () start_app(system_apps[index].config) end)
+    desktop_pages[desktop_page_counter]:addImage():loadImage(system_apps[index].icon_path):setPosition(3+(row_index-1)*app_spacing, 2 + (row_counter-1)*6):onClick(function () start_app(system_apps[index].config) end)
     
 
     --- format name into labels
@@ -111,10 +124,10 @@ for index, _ in ipairs(system_apps) do
     desktop_pages[desktop_page_counter]:addLabel():setText(labels[2]):setPosition(2+(row_index-1)*8, 6 + (row_counter-1)*6):setForeground(colors.white) 
     
     row_index = row_index + 1
-    if row_index > 3 then
+    if row_index > apps_per_row then
         row_index = 1
         row_counter = row_counter + 1
-        if row_counter > 3 then
+        if row_counter > rows then
             row_counter = 1
             desktop_page_counter = desktop_page_counter + 1
         end
