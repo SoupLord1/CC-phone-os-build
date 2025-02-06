@@ -40,6 +40,20 @@ local topBar = main_os:addFrame():setPosition(1,1):setSize("parent.w", 1):setBac
 local versionLabel = topBar:addLabel():setText("OS v1.0"):setPosition(2, 1)
 local Clock = topBar:addLabel():setText("Tempclock"):setPosition("parent.w-11", 1)
 
+local function clockTick()
+    while true do
+        Clock:setText(os.date("%r"))
+        sleep(0.01)
+    end
+end
+
+
+local clockThread = main_os:addThread()
+
+
+clockThread:start(clockTick)
+
+
 local desktop = main_os:addFrame():setPosition(1, 2):setSize("parent.w", "parent.h-2"):setBackground(colors.black)
 
 
@@ -213,19 +227,6 @@ rightButton:onClick(nextPage)
 
 -- local testApp = desktop:addImage():setPosition(3, 2):loadImage("test.bimg"):onClick(show_app)
 
-local function clockTick()
-    while true do
-        Clock:setText(os.date("%r"))
-        sleep(0.01)
-    end
-end
 
-
-local clockThread = main_os:addThread()
-
--- --local imageThread = main:addThread()
-
-clockThread:start(clockTick)
---imageThread:start(updateImages)
 
 basalt.autoUpdate()
