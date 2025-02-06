@@ -51,18 +51,18 @@ local exit_button = bottomBar:addButton():setText("Exit"):setBackground(colors.l
 local logout_button = bottomBar:addButton():setText("Logout"):setBackground(colors.lightGray):setSize(8, 1):setPosition("parent.w-self.w+1",1)
 local home_button = bottomBar:addButton():setText("Home"):setBackground(colors.lightGray):setSize(6,1):setPosition("parent.w/2-self.w/2",1)
 
-local current_app = {}
+local current_app = desktop:addFrame()
 
 local app_fetcher = require("system.modules.custom.app_fetcher")
 
 local function start_app(config)
     local app = app_fetcher.fetch(config)
     local app_handle = app()(desktop)
-    table.insert(current_app, app_handle)
+    return app_handle
 end
 
 local function stop_app()
-    current_app[1]:remove()
+    current_app:remove()
 end
 
 local app_loader = require("system.modules.custom.app_loader")
@@ -85,7 +85,7 @@ local desktop_page_counter = 1
 local row_counter = 1
 local row_index = 1
 for index, _ in ipairs(system_apps) do
-    desktop_pages[desktop_page_counter]:addImage():loadImage(system_apps[index].icon_path):setPosition(3+(row_index-1)*8, 2 + (row_counter-1)*6):onClick(function () start_app(system_apps[index].config) end)
+    desktop_pages[desktop_page_counter]:addImage():loadImage(system_apps[index].icon_path):setPosition(3+(row_index-1)*8, 2 + (row_counter-1)*6):onClick(function () current_app = start_app(system_apps[index].config) end)
     
 
     --- format name into labels
