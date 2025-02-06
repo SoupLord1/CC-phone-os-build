@@ -58,7 +58,7 @@ local app_fetcher = require("system.modules.custom.app_fetcher")
 local function start_app(config)
     local app = app_fetcher.fetch(config)
     local app_handle = app()(desktop)
-    basalt.debug(app_handle)
+    basalt.debug(app_handle == nil)
     return app_handle
 end
 
