@@ -51,7 +51,7 @@ local exit_button = bottomBar:addButton():setText("Exit"):setBackground(colors.l
 local logout_button = bottomBar:addButton():setText("Logout"):setBackground(colors.lightGray):setSize(8, 1):setPosition("parent.w-self.w+1",1)
 local home_button = bottomBar:addButton():setText("Home"):setBackground(colors.lightGray):setSize(6,1):setPosition("parent.w/2-self.w/2",1)
 
-local current_app = desktop:addFrame()
+local current_app = nil
 
 local app_fetcher = require("system.modules.custom.app_fetcher")
 
@@ -64,7 +64,9 @@ local function start_app(config)
 end
 
 local function stop_app()
-    current_app:remove()
+    if current_app ~= nil then
+        current_app:remove()
+    end
 end
 
 local app_loader = require("system.modules.custom.app_loader")
