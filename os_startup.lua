@@ -70,6 +70,12 @@ local function stop_app()
     basalt.debug(current_app == nil)
 end
 
+local function home()
+    stop_app()
+end
+
+home_button:onClick(home)
+
 local app_loader = require("system.modules.custom.app_loader")
 
 
@@ -195,11 +201,7 @@ rightButton:onClick(nextPage)
 
 
 
-local function home()
-    stop_app()
-end
 
-home_button:onClick(home)
 
 -- MAIN OS
 
