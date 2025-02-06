@@ -67,6 +67,7 @@ local function stop_app()
     if current_app ~= nil then
         current_app:hide()
     end
+    basalt.debug(current_app == nil)
 end
 
 local app_loader = require("system.modules.custom.app_loader")
@@ -207,7 +208,6 @@ home_button:onClick(home)
 -- Add a app title
 
 -- IDEA
--- Try to store a frame in a file and send it like a module
 
 -- local testApp = desktop:addImage():setPosition(3, 2):loadImage("test.bimg"):onClick(show_app)
 
