@@ -61,8 +61,8 @@ local function start_app(config)
     return app_handle
 end
 
-local function stop_app()
-    current_app:remove()
+local function stop_app(app)
+    app:remove()
 end
 
 local app_loader = require("system.modules.custom.app_loader")
@@ -177,11 +177,11 @@ rightButton:onClick(nextPage)
 
 
 
-local function home()
-    stop_app()
+local function home(app)
+    stop_app(app)
 end
 
-home_button:onClick(home)
+home_button:onClick(function () home(current_app) end)
 
 -- MAIN OS
 
