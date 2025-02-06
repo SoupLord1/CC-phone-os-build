@@ -1,0 +1,8 @@
+{
+   "app": "settings",
+   "name": "Settings Test",
+   "server": 3,
+   "author": "Soup",
+   "description": "Test App",
+   "version": 1
+}
