@@ -1,7 +1,7 @@
 {
    "app": "settings",
    "name": "Settings Test",
-   "server": 3,
+   "server": 14,
    "author": "Soup",
    "description": "Test App",
    "version": 1

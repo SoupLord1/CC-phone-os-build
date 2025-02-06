@@ -62,7 +62,7 @@ local function start_app(config)
 end
 
 local function stop_app()
-    current_app[1]:remove()
+    current_app[1]:hide()
 end
 
 local app_loader = require("system.modules.custom.app_loader")
