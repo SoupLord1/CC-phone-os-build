@@ -65,7 +65,7 @@ end
 
 local function stop_app()
     if current_app ~= nil then
-        current_app:hide()
+        current_app:remove()
     end
     basalt.debug(current_app == nil)
 end
