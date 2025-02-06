@@ -57,9 +57,10 @@ local app_fetcher = require("system.modules.custom.app_fetcher")
 
 local function start_app(config)
     local app = app_fetcher.fetch(config)
-    local app_handle = app()(desktop)
-    current_app = app_handle
-    return app_handle
+    if app ~= nil then
+        local app_handle = app()(desktop)
+        current_app = app_handle
+    end
 end
 
 local function stop_app()
