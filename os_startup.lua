@@ -51,20 +51,18 @@ local exit_button = bottomBar:addButton():setText("Exit"):setBackground(colors.l
 local logout_button = bottomBar:addButton():setText("Logout"):setBackground(colors.lightGray):setSize(8, 1):setPosition("parent.w-self.w+1",1)
 local home_button = bottomBar:addButton():setText("Home"):setBackground(colors.lightGray):setSize(6,1):setPosition("parent.w/2-self.w/2",1)
 
-local app_frame = desktop:addFrame():setSize("parent.w","parent.h"):hide()
-local current_app = app_frame:addFrame()
+local current_app = desktop:addFrame()
 
 local app_fetcher = require("system.modules.custom.app_fetcher")
 
 local function start_app(config)
     local app = app_fetcher.fetch(config)
-    local app_handle = app()(app_frame)
+    local app_handle = app()(desktop)
     current_app = app_handle
-    app_frame:show()
+    return app_handle
 end
 
 local function stop_app()
-    app_frame:hide()
     current_app:remove()
 end
 
