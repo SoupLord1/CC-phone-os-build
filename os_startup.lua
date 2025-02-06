@@ -51,7 +51,7 @@ local exit_button = bottomBar:addButton():setText("Exit"):setBackground(colors.l
 local logout_button = bottomBar:addButton():setText("Logout"):setBackground(colors.lightGray):setSize(8, 1):setPosition("parent.w-self.w+1",1)
 local home_button = bottomBar:addButton():setText("Home"):setBackground(colors.lightGray):setSize(6,1):setPosition("parent.w/2-self.w/2",1)
 
-local current_app = nil
+local current_app = desktop:addFrame():hide()
 
 local app_fetcher = require("system.modules.custom.app_fetcher")
 
