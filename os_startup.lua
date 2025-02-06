@@ -89,7 +89,7 @@ local desktop_page_counter = 1
 local row_counter = 1
 local row_index = 1
 for index, _ in ipairs(system_apps) do
-    desktop_pages[desktop_page_counter]:addImage():loadImage(system_apps[index].icon_path):setPosition(3+(row_index-1)*8, 2 + (row_counter-1)*6):onClick(function () current_app = start_app(system_apps[index].config) end)
+    desktop_pages[desktop_page_counter]:addImage():loadImage(system_apps[index].icon_path):setPosition(3+(row_index-1)*8, 2 + (row_counter-1)*6):onClick(function () start_app(system_apps[index].config) end)
     
 
     --- format name into labels
